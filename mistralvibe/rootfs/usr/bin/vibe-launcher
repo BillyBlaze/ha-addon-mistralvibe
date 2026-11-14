@@ -21,7 +21,8 @@ if [ "${AUTO_APPROVE}" = "true" ]; then
     ARGS+=(--auto-approve)
 fi
 
-cd /config
+WORKDIR="$(cat "${VIBE_HOME}/.workdir" 2>/dev/null || echo /config)"
+cd "${WORKDIR}"
 
 cat <<'BANNER'
 

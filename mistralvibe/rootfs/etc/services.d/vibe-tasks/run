@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+# s6 services don't inherit the container's stdin, so read hassio.addon_stdin
+# traffic from PID 1's fd 0 (the pipe the Supervisor writes to).
+exec /usr/local/bin/vibe-stdin-runner < /proc/1/fd/0

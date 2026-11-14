@@ -7,8 +7,10 @@ configuration:
   active_model:
     name: Active model
     description: >-
-      Default Mistral model used for new sessions. Can be changed at any time
-      inside Vibe with the /config command.
+      Default Mistral model for new sessions — any model id from
+      https://docs.mistral.ai/models (e.g. mistral-medium-latest). Validated
+      against the live API at startup. Can be changed at any time inside Vibe
+      with the /config command.
   default_agent:
     name: Default agent
     description: >-
@@ -51,6 +53,26 @@ configuration:
     description: >-
       Keep the terminal session alive when the browser tab is closed (via tmux).
       Disable if you have copy/paste issues.
+  default_task_model:
+    name: Default task model
+    description: >-
+      Model alias used for headless tasks sent via the hassio.addon_stdin
+      service. Empty = the active_model from this app.
+  task_max_runtime_minutes:
+    name: Task max runtime (minutes)
+    description: >-
+      Maximum runtime of a headless task (1-240 minutes). The task is killed
+      when the limit is reached.
+  auto_launch:
+    name: Auto-launch Vibe
+    description: >-
+      What happens when the web terminal opens. "new" starts a fresh Vibe
+      session, "continue" resumes the last one, "off" gives you a plain shell.
+  working_directory:
+    name: Working directory
+    description: >-
+      Directory Vibe starts in (and headless tasks run from). Must be a mapped
+      folder, e.g. /config, /share or /media.
 
 network:
   7681/tcp: Web terminal (ingress only — no host port required)

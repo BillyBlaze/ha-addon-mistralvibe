@@ -100,44 +100,50 @@ EOF
 chmod 600 "${ENV_FILE}"
 chmod 600 "${CONFIG_FILE}"
 
-bashio::log.info "Resolving current Mistral model names via API..."
+if [ -z "${ACTIVE_MODEL}" ] || [ "${ACTIVE_MODEL}" = "null" ]; then
+    bashio::log.fatal "No 'active_model' configured."
+    exit 1
+fi
+
+bashio::log.info "Resolving model '${ACTIVE_MODEL}' via Mistral API..."
 MODELS_JSON="$(curl -sf \
     -H "Authorization: Bearer ${MISTRAL_API_KEY}" \
     "https://api.mistral.ai/v1/models" || echo "")"
 
-resolve_model() {
-    local prefix="$1"
-    local fallback="$2"
-    if [ -n "${MODELS_JSON}" ]; then
-        echo "${MODELS_JSON}" \
-            | python3 -c "
+MODEL_NAME="$(echo "${MODELS_JSON}" | python3 -c "
 import sys, json
-data = json.load(sys.stdin)
-prefix = sys.argv[1]
-matches = [m['id'] for m in data.get('data', []) if m['id'].startswith(prefix)]
-matches.sort()
-print(matches[-1] if matches else sys.argv[2])
-" "$prefix" "$fallback" 2>/dev/null || echo "$fallback"
-    else
-        echo "$fallback"
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+wanted = sys.argv[1]
+ids = [m['id'] for m in data.get('data', [])]
+if wanted in ids:
+    print(wanted)
+else:
+    matches = sorted(i for i in ids if i.startswith(wanted))
+    print(matches[-1] if matches else '')
+" "${ACTIVE_MODEL}" 2>/dev/null || true)"
+
+if [ -n "${MODELS_JSON}" ]; then
+    if [ -z "${MODEL_NAME}" ]; then
+        bashio::log.fatal "Model '${ACTIVE_MODEL}' not found at api.mistral.ai. Check the current model ids at https://docs.mistral.ai/models and update the 'active_model' option."
+        exit 1
     fi
-}
+    if [ "${MODEL_NAME}" != "${ACTIVE_MODEL}" ]; then
+        bashio::log.info "Resolved '${ACTIVE_MODEL}' to '${MODEL_NAME}'"
+    fi
+else
+    bashio::log.warning "Could not reach api.mistral.ai/v1/models - using '${ACTIVE_MODEL}' as-is"
+    MODEL_NAME="${ACTIVE_MODEL}"
+fi
 
-MODEL_DEVSTRAL_SMALL="$(resolve_model 'devstral-small-2' 'devstral-small-2507')"
-MODEL_DEVSTRAL="$(resolve_model 'devstral-2' 'devstral-2512')"
-MODEL_MAGISTRAL="$(resolve_model 'magistral-medium' 'magistral-medium-latest')"
-
-[ -z "${MODEL_DEVSTRAL_SMALL}" ] && MODEL_DEVSTRAL_SMALL="devstral-small-2507"
-[ -z "${MODEL_DEVSTRAL}" ] && MODEL_DEVSTRAL="devstral-2512"
-[ -z "${MODEL_MAGISTRAL}" ] && MODEL_MAGISTRAL="magistral-medium-latest"
-
-bashio::log.info "Models: small=${MODEL_DEVSTRAL_SMALL} large=${MODEL_DEVSTRAL} magistral=${MODEL_MAGISTRAL}"
+bashio::log.info "Active model: ${ACTIVE_MODEL} (api id: ${MODEL_NAME})"
 
 bashio::log.info "Writing Vibe config to ${CONFIG_FILE}"
 sed \
-    -e "s|__DEVSTRAL_SMALL__|${MODEL_DEVSTRAL_SMALL}|g" \
-    -e "s|__DEVSTRAL__|${MODEL_DEVSTRAL}|g" \
-    -e "s|__MAGISTRAL__|${MODEL_MAGISTRAL}|g" \
+    -e "s|__MODEL_NAME__|${MODEL_NAME}|g" \
+    -e "s|__ACTIVE_MODEL__|${ACTIVE_MODEL}|g" \
     -e "s|__HA_URL__|http://supervisor/core|g" \
     -e "s|__HA_TOKEN__|${SUPERVISOR_TOKEN}|g" \
     /usr/share/vibe-defaults/config.toml.tpl > "${CONFIG_FILE}"
@@ -171,5 +177,6 @@ EOF
 
 echo "${AUTO_APPROVE}" > "${VIBE_HOME}/.auto_approve"
 echo "${DEFAULT_AGENT}" > "${VIBE_HOME}/.default_agent"
+echo "$(bashio::config 'working_directory')" > "${VIBE_HOME}/.workdir"
 
 bashio::log.info "Mistral Vibe initialised – model: ${ACTIVE_MODEL}, agent: ${DEFAULT_AGENT}"

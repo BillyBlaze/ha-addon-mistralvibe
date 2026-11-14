@@ -1,4 +1,26 @@
 ARG BUILD_ARCH=amd64
+
+# ---- ttyd web client (OSC 52 clipboard support) ------------------------------
+# ttyd 1.7.7's bundled xterm.js predates OSC 52 clipboard writes, so copy/paste
+# in the browser terminal is broken. Build the web client from a pinned ttyd
+# commit and serve it via --index instead. yarn via corepack so ttyd's
+# lockfile is honored; COREPACK_INTEGRITY_KEYS=0 keeps the pinned corepack
+# working across npm signing-key rotations (integrity comes from yarn.lock).
+# Node pinned to 22.23.5 — includes the fix for CVE-2026-111497 (Brotli decoder
+# out-of-bounds write / "Node2Shell", fixed in 22.23.4+, Oct 2026 security
+# release). The floating 22 tag would also work today but can silently change.
+FROM node:22.23.5-bookworm-slim AS ttyd-client
+ARG TTYD_CLIENT_COMMIT=2922cb89f518bae4d0fcf4d757a7419638fc71fc
+RUN curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+        "https://github.com/tsl0922/ttyd/archive/${TTYD_CLIENT_COMMIT}.tar.gz" \
+        | tar xz && mv "ttyd-${TTYD_CLIENT_COMMIT}" /ttyd
+WORKDIR /ttyd/html
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    COREPACK_NPM_REGISTRY=https://registry.npmjs.org \
+    COREPACK_INTEGRITY_KEYS=0
+RUN npm install -g corepack@0.35.0 && corepack enable && \
+    yarn install --immutable && yarn run inline
+
 FROM debian:bookworm-slim
 
 ARG BUILD_ARCH
@@ -44,6 +66,9 @@ RUN case "${BUILD_ARCH}" in \
       -o /usr/local/bin/ttyd \
  && chmod +x /usr/local/bin/ttyd
 
+# Custom ttyd web client with OSC 52 clipboard support (see ttyd-client stage)
+COPY --from=ttyd-client /ttyd/html/dist/inline.html /usr/share/ttyd/index.html
+
 # ---- s6-overlay v2 -----------------------------------------------------------
 # Debian bookworm is merged-usr: /bin is a symlink to usr/bin. The s6 tarball
 # has a real ./bin directory (would clobber it) and ./usr/bin/execlineb is a
@@ -82,9 +107,12 @@ COPY rootfs/ /
 
 RUN chmod a+x \
         /usr/bin/vibe-launcher \
+        /usr/local/bin/vibe-stdin-runner \
         /etc/cont-init.d/10-init-vibe.sh \
         /etc/services.d/vibe-terminal/run \
-        /etc/services.d/vibe-terminal/finish
+        /etc/services.d/vibe-terminal/finish \
+        /etc/services.d/vibe-tasks/run \
+        /etc/services.d/vibe-tasks/finish
 
 ENTRYPOINT ["/init"]
 

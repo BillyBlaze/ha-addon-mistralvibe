@@ -1,0 +1,127 @@
+#!/usr/bin/with-contenv bashio
+# Headless Vibe runs triggered from Home Assistant automations via the
+# hassio.addon_stdin service. One JSON object per line on stdin:
+#
+#   {"prompt": "...", "model": "optional-alias", "run_id": "my-task"}
+#   {"prompt_file": "/share/task.md"}
+#   {"abort": true}   kill the currently running task
+#
+# One task runs at a time; a task arriving while one is active is rejected.
+# Outcomes are reported as HA events: mistralvibe_runner_ready,
+# mistralvibe_run_started, mistralvibe_run_finished (aborted: true when
+# killed via {"abort": true}), mistralvibe_run_rejected.
+# Transcripts are logged to /data/vibe/task-logs/<run_id>.log.
+
+set -u
+
+OPTS="${STDIN_RUNNER_OPTIONS:-/data/options.json}"
+SUPERVISOR_URL="${STDIN_RUNNER_SUPERVISOR_URL:-http://supervisor}"
+DEFAULT_MODEL="$(jq -r '.default_task_model // ""' "${OPTS}")"
+MAX_MINUTES="$(jq -r '.task_max_runtime_minutes // 30' "${OPTS}")"
+LOG_DIR="${STDIN_RUNNER_LOG_DIR:-/data/vibe/task-logs}"
+export VIBE_HOME="${VIBE_HOME:-/data/vibe}"
+
+mkdir -p "${LOG_DIR}"
+
+if [ -f "${VIBE_HOME}/.env" ]; then
+    set -a; . "${VIBE_HOME}/.env"; set +a
+fi
+
+fire_event() {
+    local event="$1" payload="$2"
+    curl -s -m 10 -X POST \
+        -H "Authorization: Bearer ${SUPERVISOR_TOKEN:-}" \
+        -H "Content-Type: application/json" \
+        -d "${payload}" \
+        "${SUPERVISOR_URL}/core/api/events/${event}" > /dev/null 2>&1 || true
+}
+
+TASK_PID=""
+ABORTED=false
+
+task_running() {
+    [ -n "${TASK_PID}" ] && kill -0 "${TASK_PID}" 2>/dev/null
+}
+
+bashio::log.info "stdin task runner ready (default model: ${DEFAULT_MODEL:-vibe default}, max ${MAX_MINUTES} min)"
+fire_event mistralvibe_runner_ready "$(jq -n --arg m "${DEFAULT_MODEL:-default}" '{model: $m}')"
+
+handle_line() {
+    # returns 0 if the line was consumed as a control message
+    local line="$1"
+    [ -z "${line}" ] && return 0
+    if ! jq -e . > /dev/null 2>&1 <<< "${line}"; then
+        bashio::log.warning "task runner: ignoring non-JSON stdin line"
+        return 0
+    fi
+    if [ "$(jq -r '.abort // false' <<< "${line}")" = "true" ]; then
+        if task_running; then
+            ABORTED=true
+            kill "${TASK_PID}" 2>/dev/null || true
+            bashio::log.info "task runner: abort requested for pid ${TASK_PID}"
+        fi
+        return 0
+    fi
+    if task_running; then
+        fire_event mistralvibe_run_rejected "$(jq -n '{reason: "task already running"}')"
+        bashio::log.warning "task runner: rejected incoming task, one is already running"
+        return 0
+    fi
+    return 1
+}
+
+while IFS= read -r line; do
+    handle_line "${line}" && continue
+
+    PROMPT="$(jq -r '.prompt // empty' <<< "${line}")"
+    PROMPT_FILE="$(jq -r '.prompt_file // empty' <<< "${line}")"
+    RUN_ID="$(jq -r '.run_id // empty' <<< "${line}")"
+    MODEL="$(jq -r --arg d "${DEFAULT_MODEL}" '.model // $d' <<< "${line}")"
+    [ -z "${RUN_ID}" ] && RUN_ID="task-$(date +%s)"
+
+    if [ -z "${PROMPT}" ] && [ -n "${PROMPT_FILE}" ]; then
+        if [ -f "${PROMPT_FILE}" ]; then
+            PROMPT="$(cat "${PROMPT_FILE}")"
+        else
+            fire_event mistralvibe_run_rejected "$(jq -n --arg r "${RUN_ID}" '{run_id: $r, reason: "prompt_file not found"}')"
+            continue
+        fi
+    fi
+    if [ -z "${PROMPT}" ]; then
+        fire_event mistralvibe_run_rejected "$(jq -n --arg r "${RUN_ID}" '{run_id: $r, reason: "prompt or prompt_file required"}')"
+        continue
+    fi
+
+    LOG_FILE="${LOG_DIR}/${RUN_ID}.log"
+    MODEL_ARGS=()
+    [ -n "${MODEL}" ] && MODEL_ARGS=(--model "${MODEL}")
+
+    bashio::log.info "task runner: starting '${RUN_ID}' (max ${MAX_MINUTES} min, log: ${LOG_FILE})"
+    fire_event mistralvibe_run_started "$(jq -n --arg r "${RUN_ID}" --arg m "${MODEL:-default}" '{run_id: $r, model: $m}')"
+
+    ABORTED=false
+    (
+        WORKDIR="$(cat "${VIBE_HOME}/.workdir" 2>/dev/null || echo /config)"
+        cd "${WORKDIR}"
+        timeout $((MAX_MINUTES * 60)) vibe --auto-approve ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} --prompt "${PROMPT}" \
+            > "${LOG_FILE}" 2>&1
+    ) &
+    TASK_PID=$!
+
+    # while the task runs, keep reading stdin so abort/reject stay responsive
+    while task_running; do
+        if IFS= read -r -t 1 extra; then
+            handle_line "${extra}" || true
+        fi
+    done
+    wait "${TASK_PID}"; RC=$?
+    TASK_PID=""
+
+    fire_event mistralvibe_run_finished "$(jq -n \
+        --arg r "${RUN_ID}" \
+        --argjson a "${ABORTED}" \
+        --argjson rc "${RC}" \
+        --arg l "${LOG_FILE}" \
+        '{run_id: $r, aborted: $a, exit_code: $rc, log: $l}')"
+    bashio::log.info "task runner: '${RUN_ID}' finished (exit ${RC}, aborted ${ABORTED})"
+done

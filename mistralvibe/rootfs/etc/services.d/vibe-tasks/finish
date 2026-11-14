@@ -1,0 +1,2 @@
+#!/usr/bin/with-contenv bashio
+pkill -f vibe-stdin-runner 2>/dev/null || true

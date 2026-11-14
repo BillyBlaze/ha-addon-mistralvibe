@@ -33,7 +33,12 @@ profile mistralvibe flags=(attach_disconnected,mediate_deleted) {
   /usr/lib/** ixmr,
   /usr/local/** ixr,
   /usr/libexec/** ixr,
-  /opt/** ixmr,
+  # uv installs CLI tools here (UV_TOOL_BIN_DIR); runtime self-updates
+  # (auto_update_cli) need write access to replace the binary
+  /usr/local/bin/** rwk,
+  # uv-managed tools and Python (UV_TOOL_DIR / UV_PYTHON_INSTALL_DIR);
+  # runtime self-updates need write access here too
+  /opt/** rwixmr,
 
   /data/** rwk,
 

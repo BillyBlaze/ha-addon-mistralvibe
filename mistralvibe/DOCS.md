@@ -1,7 +1,7 @@
 # Mistral Vibe — Home Assistant App
 
 Run **Mistral Vibe CLI** (Mistral AI's open-source agentic coding agent powered
-by Devstral 2) directly inside Home Assistant. Talk to your smart home in
+by Mistral's models) directly inside Home Assistant. Talk to your smart home in
 natural language through a browser terminal that has full access to entities,
 services, automations and YAML configs via a custom MCP server.
 
@@ -11,7 +11,7 @@ services, automations and YAML configs via a custom MCP server.
 - Multi-file editing across `/config`, `/share` and `/media`
 - Live entity & service inspection via the Supervisor API
 - Persistent sessions, command history and conversation logs in `/data/vibe`
-- Open-source, Apache 2.0 licensed CLI on top of open-weight Devstral models
+- Open-source, Apache 2.0 licensed CLI on top of Mistral's current model catalog
 - A read-only "plan" mode for exploration without any writes
 
 ## API Key & Kosten
@@ -38,7 +38,7 @@ Für gelegentliche Nutzung oder zum Ausprobieren:
 2. API-Key erstellen unter **Studio → Organization → API keys**
 3. Key als `mistral_api_key` eintragen
 
-Abrechnung per Token. Aktuelle Preise: Devstral Small 2 ab $0.10/1M Input-Token, Devstral 2 ab $0.40/1M Input-Token.
+Abrechnung per Token. Aktuelle Preise siehe https://mistral.ai/pricing (z. B. Mistral Small 4 ab $0.10/1M Input-Token).
 
 ## First-time setup
 
@@ -59,12 +59,16 @@ internally to authenticate the custom MCP server against Home Assistant Core.
 | Option | Default | Description |
 | --- | --- | --- |
 | `mistral_api_key` | *(required)* | Your Mistral API key. Stored in `/data/vibe/.env`, never sent anywhere except `api.mistral.ai`. |
-| `active_model` | `devstral-small-2` | One of `devstral-2`, `devstral-small-2`, `magistral-medium`, `mistral-medium-latest`, `codestral-latest`. Switch on the fly inside Vibe with `/config`. |
+| `active_model` | `mistral-medium-latest` | Any Mistral model id (e.g. `mistral-medium-latest`, `mistral-large-4`, `mistral-small-latest`) from https://docs.mistral.ai/models. Validated against the live API at startup — an id that no longer exists aborts the start with a clear log message. Switch on the fly inside Vibe with `/config`. |
 | `default_agent` | `default` | `default` asks before every tool call. `plan` is a fully read-only agent — Vibe can look around but cannot edit, run shells or call services. |
 | `auto_approve` | `false` | When `true`, Vibe skips the confirmation prompt before running tools. **Convenient but dangerous.** Leave off unless you really know what you're doing. |
 | `auto_update_cli` | `true` | Lets Vibe self-update on launch when a newer release is on PyPI. Disable to pin the version that ships with the app. |
 | `enable_telemetry` | `false` | Forwarded to Vibe as the `enable_telemetry` config flag. Off by default. |
 | `log_level` | `info` | Controls the verbosity of the underlying `ttyd` server (`trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`). |
+| `auto_launch` | `new` | What happens when the web terminal opens: `new` starts a fresh Vibe session, `continue` resumes the last one, `off` opens a plain shell. |
+| `working_directory` | `/config` | Directory Vibe starts in and headless tasks run from. Must be a mapped folder (`/config`, `/share`, `/media`). |
+| `default_task_model` | *(empty)* | Model for headless `hassio.addon_stdin` tasks. Empty = the app's `active_model`. |
+| `task_max_runtime_minutes` | `30` | Max runtime of a headless task (1-240 min) before it is killed. |
 
 Every option above maps 1:1 to a key the init script writes into
 `/data/vibe/config.toml` or `/data/vibe/.env` — so you can also edit them
@@ -107,10 +111,41 @@ directly in a Vibe session if you want full control.
 applies the `auto_approve` / `default_agent` flags from app options and
 execs the CLI. The custom MCP server (`/usr/share/ha-mcp/server.py`) is started on demand by Vibe as a stdio child process. It receives `HA_URL` and `HA_TOKEN` via `[mcp_servers.env]` in `config.toml`.
 
+## Headless tasks from automations
+
+The app listens on `hassio.addon_stdin` (`stdin: true`). An automation can run a
+one-shot Vibe task without opening the terminal — call the service
+`hassio.addon_stdin` with this add-on as target and a JSON body, one object per
+line:
+
+```json
+{"prompt": "Summarize all automations that changed in the last 24 hours", "run_id": "daily-summary"}
+{"prompt_file": "/share/vibe-task.md"}
+{"abort": true}
+```
+
+- `prompt` / `prompt_file` — the task (one of them required). `model` overrides
+  the model per task; default is `default_task_model` (empty = the app's
+  `active_model`).
+- Tasks run serialized — a task arriving while one is active is rejected.
+- `{"abort": true}` kills the running task.
+- Runtime is capped by `task_max_runtime_minutes` (default 30, max 240).
+- Transcripts are written to `/data/vibe/task-logs/<run_id>.log`.
+- Outcomes fire as HA events: `mistralvibe_runner_ready`, `mistralvibe_run_started`,
+  `mistralvibe_run_finished` (carries `run_id`, `aborted`, `exit_code`, `log`),
+  `mistralvibe_run_rejected`. React to them in automations, e.g. trigger on
+  `mistralvibe_run_finished`.
+
+Tasks run with `--auto-approve` — they can call HA services. Only send prompts
+you trust, and prefer `default_agent: plan`-style read-only prompts for
+unattended runs.
+
 ## Switching models on the fly
 
-Inside a Vibe session, type `/config`. You'll see the list of models defined
-in `/data/vibe/config.toml` — pick one and Vibe switches without restarting.
+Inside a Vibe session, type `/config`. The model selected in the app options
+is pre-registered in `/data/vibe/config.toml`; to switch between several
+models without restarting, add more `[[models]]` blocks to that file (see
+below) and pick one with `/config`.
 
 You can also add custom providers (Ollama, vLLM, on-prem Mistral) by editing
 the `[[providers]]` and `[[models]]` blocks in that file. Local inference is
@@ -142,7 +177,7 @@ fully supported.
 | Aspect | `claudecode` (robsonfelix) | `mistralvibe` (this) |
 | --- | --- | --- |
 | Engine | Claude Code (Anthropic, closed) | Mistral Vibe CLI (Apache 2.0, open) |
-| Default model | Claude Sonnet | Devstral 2 (123B, open weights) |
+| Default model | Claude Sonnet | Mistral Medium (latest) |
 | Auth | Anthropic OAuth (long URL flow) | Mistral API key in app options |
 | Local inference | No | Yes (via Ollama / vLLM / on-prem) |
 | HA bridge | hass-mcp via stdio | custom FastMCP server via stdio |
@@ -167,6 +202,6 @@ different state directories.
 
 ## Credits
 
-- [Mistral AI](https://mistral.ai) — Devstral 2 and Mistral Vibe CLI
+- [Mistral AI](https://mistral.ai) — Mistral models and Mistral Vibe CLI
 - [tsl0922/ttyd](https://github.com/tsl0922/ttyd) — browser terminal
-- [robsonfelix/robsonfelix-hass-addons](https://github.com/robsonfelix/robsonfelix-hass-addons) — the Claude Code add-on this is structurally based on
+- [robsonfelix/robsonfelix-hass-addons](https://github.com/robsonfelix/robsonfelix-hass-addons) — the Claude Code app this is structurally based on

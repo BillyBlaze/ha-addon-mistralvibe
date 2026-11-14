@@ -37,7 +37,14 @@ THEME="$(bashio::config 'terminal_theme')"
 
 THEME_JSON="$([ "${THEME:-dark}" = "light" ] && echo '{"background":"#eff1f5","foreground":"#4c4f69","cursor":"#dc8a78"}' || echo '{"background":"#0f0f17","foreground":"#e6e6f0","cursor":"#ff7a90"}')"
 
-TTYD_OPTS="--writable --max-clients 5 --ping-interval 30 -t scrollback=20000 -t titleFixed=MistralVibe -t fontSize=${FONT_SIZE:-14} -t theme=${THEME_JSON} ${TTYD_DEBUG}"
+TTYD_OPTS="--writable --max-clients 5 --ping-interval 30 --index /usr/share/ttyd/index.html -t scrollback=20000 -t titleFixed=MistralVibe -t fontSize=${FONT_SIZE:-14} -t theme=${THEME_JSON} ${TTYD_DEBUG}"
+
+AUTO_LAUNCH="$(bashio::config 'auto_launch')"
+case "${AUTO_LAUNCH}" in
+    continue) LAUNCHER="/usr/bin/vibe-launcher --continue" ;;
+    new)      LAUNCHER="/usr/bin/vibe-launcher" ;;
+    *)        LAUNCHER="" ;;
+esac
 
 if [ "${SESSION_PERSISTENCE}" = "true" ]; then
     mkdir -p /root/.config/tmux
@@ -46,12 +53,20 @@ set -g mouse on
 set -g history-limit 10000
 set -g default-terminal "xterm-256color"
 TMUXEOF
-    DESKTOP_CMD="tmux new-session -A -s vibe '/usr/bin/vibe-launcher'; bash"
+    if [ -n "${LAUNCHER}" ]; then
+        DESKTOP_CMD="tmux new-session -A -s vibe '${LAUNCHER}'; bash"
+    else
+        DESKTOP_CMD="tmux new-session -A -s vibe; bash"
+    fi
 else
-    DESKTOP_CMD="/usr/bin/vibe-launcher"
+    if [ -n "${LAUNCHER}" ]; then
+        DESKTOP_CMD="${LAUNCHER}"
+    else
+        DESKTOP_CMD="bash --login"
+    fi
 fi
 
-MOBILE_CMD="/usr/bin/vibe-launcher"
+MOBILE_CMD="${LAUNCHER:-bash --login}"
 
 bashio::log.info "Starting ttyd desktop on port 7682"
 ttyd --port 7682 --interface 127.0.0.1 ${TTYD_OPTS} bash -c "${DESKTOP_CMD}" &

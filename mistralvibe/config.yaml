@@ -1,11 +1,11 @@
 name: Mistral Vibe
-version: "2.0.0"
+version: "2.1.0-beta1"
 slug: mistralvibe
 description: >-
-  Run Mistral Vibe CLI (Devstral 2) directly inside Home Assistant.
+  Run Mistral Vibe CLI directly inside Home Assistant.
   Create automations, debug configurations and manage your smart home with
   natural language through a browser terminal.
-url: https://github.com/umrath/mistralvibe-hass-app/tree/main/mistralvibe
+url: https://github.com/BillyBlaze/ha-addon-mistralvibe
 arch:
   - amd64
   - aarch64
@@ -14,7 +14,8 @@ arch:
 ingress: true
 ingress_port: 7681
 ingress_stream: true
-panel_icon: mdi:robot-outline
+stdin: true
+panel_icon: mdi:cat
 panel_title: Mistral Vibe
 init: false
 
@@ -43,10 +44,10 @@ host_pid: false
 host_dbus: false
 full_access: false
 
-# --- Add-on options (shown in HA UI) ----------------------------------------
+# --- App options (shown in HA UI) -------------------------------------------
 options:
   mistral_api_key: ""
-  active_model: "devstral-small-2"
+  active_model: "mistral-medium-latest"
   default_agent: "default"
   auto_approve: false
   auto_update_cli: true
@@ -56,10 +57,14 @@ options:
   terminal_theme: dark
   reset_data: false
   session_persistence: true
+  default_task_model: ""
+  task_max_runtime_minutes: 30
+  auto_launch: "new"
+  working_directory: "/config"
 
 schema:
   mistral_api_key: password
-  active_model: list(devstral-2|devstral-small-2|magistral-medium|mistral-medium-latest|codestral-latest)?
+  active_model: str?
   default_agent: list(default|plan)?
   auto_approve: bool?
   auto_update_cli: bool?
@@ -69,6 +74,10 @@ schema:
   terminal_theme: list(dark|light)?
   reset_data: bool?
   session_persistence: bool?
+  default_task_model: str?
+  task_max_runtime_minutes: int(1,240)?
+  auto_launch: list(off|new|continue)?
+  working_directory: str?
 
 # --- Apparmor & startup ------------------------------------------------------
 apparmor: true

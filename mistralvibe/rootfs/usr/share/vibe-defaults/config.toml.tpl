@@ -1,4 +1,4 @@
-active_model = "devstral-small-2"
+active_model = "__ACTIVE_MODEL__"
 vim_keybindings = false
 textual_theme = "textual-dark"
 auto_compact_threshold = 100000
@@ -31,25 +31,9 @@ api_key_env_var = "MISTRAL_API_KEY"
 backend = "mistral"
 
 [[models]]
-name = "__DEVSTRAL_SMALL__"
+name = "__MODEL_NAME__"
 provider = "mistral"
-alias = "devstral-small-2"
-input_price = 0.1
-output_price = 0.3
-
-[[models]]
-name = "__DEVSTRAL__"
-provider = "mistral"
-alias = "devstral-2"
-input_price = 0.4
-output_price = 2.0
-
-[[models]]
-name = "__MAGISTRAL__"
-provider = "mistral"
-alias = "magistral-medium"
-input_price = 2.0
-output_price = 5.0
+alias = "__ACTIVE_MODEL__"
 
 [[mcp_servers]]
 name = "hass"

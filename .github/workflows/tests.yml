@@ -1,0 +1,32 @@
+# Smoke checks for the mistralvibe add-on on every PR and push to main:
+# shell syntax of every rootfs script, python syntax of MCP server and proxy,
+# YAML validity + options/schema/translation coverage, config.toml template.
+# Read-only: nothing here can push, comment or publish.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+      - name: Run smoke checks
+        run: bash .github/scripts/smoke.sh
