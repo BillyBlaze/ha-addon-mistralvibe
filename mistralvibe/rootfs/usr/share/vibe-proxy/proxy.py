@@ -63,28 +63,56 @@ async def handle(client_r, client_w):
     await srv_w.drain()
     await asyncio.gather(pipe(client_r, srv_w), pipe(srv_r, client_w))
 
+async def read_body(client_r, header):
+    """Read the request body, handling both Content-Length and chunked
+    transfer encoding. The first read in handle() may already have buffered
+    part (or all) of the body after the header terminator."""
+    head, _, buffered = header.partition(b"\r\n\r\n")
+    if b"transfer-encoding: chunked" in head.lower():
+        body = buffered
+        out = b""
+        while True:
+            while b"\r\n" not in body:
+                chunk = await asyncio.wait_for(client_r.read(4096), timeout=10)
+                if not chunk:
+                    return out
+                body += chunk
+            size_line, body = body.split(b"\r\n", 1)
+            try:
+                size = int(size_line.strip(), 16)
+            except ValueError:
+                return out
+            if size == 0:
+                return out
+            while len(body) < size + 2:
+                chunk = await asyncio.wait_for(client_r.read(4096), timeout=10)
+                if not chunk:
+                    return out
+                body += chunk
+            out += body[:size]
+            body = body[size + 2:]
+    length = 0
+    for line in head.split(b"\r\n"):
+        if line.lower().startswith(b"content-length:"):
+            try:
+                length = int(line.split(b":", 1)[1].strip())
+            except ValueError:
+                length = 0
+    body = buffered
+    while len(body) < length:
+        chunk = await asyncio.wait_for(client_r.read(length - len(body)), timeout=10)
+        if not chunk:
+            break
+        body += chunk
+    return body[:length]
+
 async def handle_task(client_r, client_w, header):
     """Headless task intake: POST /task with a JSON body (one task object).
     Appends the task to the queue file the vibe-stdin-runner tails.
     hassio.addon_stdin can't be used here: under our s6 init, PID 1's fd 0 is
     /dev/null, so container-stdin delivery has nowhere to land."""
-    length = 0
-    for line in header.split(b'\r\n'):
-        if line.lower().startswith(b'content-length:'):
-            try:
-                length = int(line.split(b':', 1)[1].strip())
-            except ValueError:
-                length = 0
-    sep = b"\r\n\r\n"
-    print(f"DEBUG /task len={length} chunked={b'transfer-encoding: chunked' in header.lower()} buffered={len(header.partition(sep)[2])}", flush=True)
-    # the first read may already have buffered part (or all) of the body
-    body = header.partition(b'\r\n\r\n')[2]
     try:
-        while len(body) < length:
-            chunk = await asyncio.wait_for(client_r.read(length - len(body)), timeout=10)
-            if not chunk:
-                break
-            body += chunk
+        body = await read_body(client_r, header)
         task = json.loads(body.decode('utf-8'))
         assert isinstance(task, dict)
         os.makedirs(os.path.dirname(TASK_QUEUE), exist_ok=True)
