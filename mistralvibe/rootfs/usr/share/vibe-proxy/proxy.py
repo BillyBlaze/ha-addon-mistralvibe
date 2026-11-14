@@ -75,7 +75,8 @@ async def handle_task(client_r, client_w, header):
                 length = int(line.split(b':', 1)[1].strip())
             except ValueError:
                 length = 0
-    body = b''
+    # the first read may already have buffered part (or all) of the body
+    body = header.partition(b'\r\n\r\n')[2]
     try:
         while len(body) < length:
             chunk = await asyncio.wait_for(client_r.read(length - len(body)), timeout=10)
