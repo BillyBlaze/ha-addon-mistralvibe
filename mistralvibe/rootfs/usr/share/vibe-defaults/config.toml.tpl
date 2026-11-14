@@ -1,9 +1,6 @@
 active_model = "__ACTIVE_MODEL__"
 vim_keybindings = false
-textual_theme = "textual-dark"
 auto_compact_threshold = 100000
-context_warnings = true
-include_model_info = true
 include_project_context = true
 enable_update_checks = true
 enable_telemetry = false
@@ -12,7 +9,6 @@ disable_welcome_banner_animation = true
 system_prompt_id = "ha"
 
 [project_context]
-max_chars = 60000
 default_commit_count = 5
 
 [session_logging]
@@ -20,7 +16,6 @@ save_dir = "/data/vibe/logs/session"
 enabled = true
 
 [tools]
-tool_paths = []
 enabled_tools = []
 disabled_tools = []
 
