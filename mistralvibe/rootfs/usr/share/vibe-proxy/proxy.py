@@ -1,7 +1,11 @@
 import asyncio
+import json
+import os
 import re
 
 MOBILE_PATTERNS = [b'iPhone', b'iPad']
+
+TASK_QUEUE = "/data/vibe/task-queue.jsonl"
 
 def is_mobile(header_bytes):
     ua = re.search(b'User-Agent: ([^\r\n]+)', header_bytes, re.IGNORECASE)
@@ -38,6 +42,11 @@ async def handle(client_r, client_w):
         client_w.close()
         return
 
+    request_line = header.split(b'\r\n', 1)[0].decode('utf-8', 'replace')
+    if request_line.startswith('POST /task'):
+        await handle_task(client_r, client_w, header)
+        return
+
     port = 7683 if is_mobile(header) else 7682
 
     for attempt in range(5):
@@ -53,6 +62,39 @@ async def handle(client_r, client_w):
     srv_w.write(header)
     await srv_w.drain()
     await asyncio.gather(pipe(client_r, srv_w), pipe(srv_r, client_w))
+
+async def handle_task(client_r, client_w, header):
+    """Headless task intake: POST /task with a JSON body (one task object).
+    Appends the task to the queue file the vibe-stdin-runner tails.
+    hassio.addon_stdin can't be used here: under our s6 init, PID 1's fd 0 is
+    /dev/null, so container-stdin delivery has nowhere to land."""
+    length = 0
+    for line in header.split(b'\r\n'):
+        if line.lower().startswith(b'content-length:'):
+            try:
+                length = int(line.split(b':', 1)[1].strip())
+            except ValueError:
+                length = 0
+    body = b''
+    try:
+        while len(body) < length:
+            chunk = await asyncio.wait_for(client_r.read(length - len(body)), timeout=10)
+            if not chunk:
+                break
+            body += chunk
+        task = json.loads(body.decode('utf-8'))
+        assert isinstance(task, dict)
+        os.makedirs(os.path.dirname(TASK_QUEUE), exist_ok=True)
+        with open(TASK_QUEUE, 'a') as f:
+            f.write(json.dumps(task) + '\n')
+        ok = True
+    except Exception:
+        ok = False
+    resp = json.dumps({'ok': ok}).encode()
+    client_w.write(b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: '
+                   + str(len(resp)).encode() + b'\r\nConnection: close\r\n\r\n' + resp)
+    await client_w.drain()
+    client_w.close()
 
 async def main():
     srv = await asyncio.start_server(handle, '0.0.0.0', 7681)

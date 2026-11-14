@@ -113,16 +113,19 @@ execs the CLI. The custom MCP server (`/usr/share/ha-mcp/server.py`) is started 
 
 ## Headless tasks from automations
 
-The app listens on `hassio.addon_stdin` (`stdin: true`). An automation can run a
-one-shot Vibe task without opening the terminal — call the service
-`hassio.addon_stdin` with this add-on as target and a JSON body, one object per
-line:
+An automation can run a one-shot Vibe task without opening the terminal — POST
+a JSON object to the app's task endpoint (the app's ingress port 7681, reachable
+from HA core via its add-on DNS name, e.g. `http://local-mistralvibe.local.hass.io:7681/task`):
 
 ```json
 {"prompt": "Summarize all automations that changed in the last 24 hours", "run_id": "daily-summary"}
 {"prompt_file": "/share/vibe-task.md"}
 {"abort": true}
 ```
+
+Note: `hassio.addon_stdin` is not used — under this app's s6 init the container's
+PID 1 stdin is `/dev/null`, so that service's delivery has nowhere to land. The
+HTTP endpoint writes the task into a queue file the runner tails.
 
 - `prompt` / `prompt_file` — the task (one of them required). `model` overrides
   the model per task; default is `default_task_model` (empty = the app's

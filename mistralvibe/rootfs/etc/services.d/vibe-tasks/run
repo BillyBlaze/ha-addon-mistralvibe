@@ -1,5 +1,7 @@
 #!/usr/bin/with-contenv bashio
-# s6 services don't inherit the container's stdin, so read hassio.addon_stdin
-# traffic from PID 1's fd 0 (the pipe the Supervisor writes to).
-bashio::log.info "fd0 self=$(readlink /proc/self/fd/0) pid1=$(readlink /proc/1/fd/0 2>/dev/null)"
-exec /usr/local/bin/vibe-stdin-runner < /proc/1/fd/0
+# The task runner reads JSON task lines from the queue file that the proxy's
+# POST /task endpoint appends to (container stdin is /dev/null under our s6
+# init, so hassio.addon_stdin delivery doesn't reach us).
+mkdir -p /data/vibe
+touch /data/vibe/task-queue.jsonl
+tail -n +1 -F /data/vibe/task-queue.jsonl | /usr/local/bin/vibe-stdin-runner
