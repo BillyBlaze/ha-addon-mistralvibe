@@ -70,7 +70,13 @@ handle_line() {
     return 1
 }
 
-while IFS= read -r line; do
+while true; do
+    # stdin EOF happens when no hassio.addon_stdin writer is attached (fd 0 is
+    # then effectively /dev/null): don't exit — s6 would restart us in a loop.
+    if ! IFS= read -r line; then
+        sleep 2
+        continue
+    fi
     handle_line "${line}" && continue
 
     PROMPT="$(jq -r '.prompt // empty' <<< "${line}")"
