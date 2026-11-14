@@ -98,7 +98,6 @@ HA_URL=http://supervisor/core
 HA_TOKEN=${SUPERVISOR_TOKEN}
 EOF
 chmod 600 "${ENV_FILE}"
-chmod 600 "${CONFIG_FILE}"
 
 if [ -z "${ACTIVE_MODEL}" ] || [ "${ACTIVE_MODEL}" = "null" ]; then
     bashio::log.fatal "No 'active_model' configured."
@@ -147,6 +146,7 @@ sed \
     -e "s|__HA_URL__|http://supervisor/core|g" \
     -e "s|__HA_TOKEN__|${SUPERVISOR_TOKEN}|g" \
     /usr/share/vibe-defaults/config.toml.tpl > "${CONFIG_FILE}"
+chmod 600 "${CONFIG_FILE}"
 
 python3 - "$CONFIG_FILE" "$ACTIVE_MODEL" "$AUTO_UPDATE_CLI" "$ENABLE_TELEMETRY" <<'PY'
 import sys, re, pathlib
