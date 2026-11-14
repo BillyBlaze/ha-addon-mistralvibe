@@ -9,7 +9,9 @@ ARG BUILD_ARCH=amd64
 # Node pinned to 22.23.5 — includes the fix for CVE-2026-111497 (Brotli decoder
 # out-of-bounds write / "Node2Shell", fixed in 22.23.4+, Oct 2026 security
 # release). The floating 22 tag would also work today but can silently change.
-FROM node:22.23.5-bookworm-slim AS ttyd-client
+# Full bookworm image (not -slim): the slim variant has no curl/git, which this
+# stage needs.
+FROM node:22.23.5-bookworm AS ttyd-client
 ARG TTYD_CLIENT_COMMIT=2922cb89f518bae4d0fcf4d757a7419638fc71fc
 RUN curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
         "https://github.com/tsl0922/ttyd/archive/${TTYD_CLIENT_COMMIT}.tar.gz" \
