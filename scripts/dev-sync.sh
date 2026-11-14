@@ -4,10 +4,11 @@
 # no SSH keys. Fast local dev loop: no GitHub, no branches, no registry.
 #
 # Usage:
-#   scripts/dev-sync.sh <ha-host> <samba-user> <samba-password>
-# Example:
-#   scripts/dev-sync.sh <ha-host> <samba-user> <samba-password>
-#   (never commit real hostnames, usernames or passwords — use placeholders)
+#   scripts/dev-sync.sh            # reads ~/.ha-dev-sync.env (chmod 600)
+#   HA_HOST=... SMB_USER=... SMB_PASS=... scripts/dev-sync.sh   # or env vars
+#
+# Never pass credentials as arguments or put them in this repo — command-line
+# args land in shell history and the env file stays outside the repo.
 #
 # Prereq on the HA host: the official Samba share app installed and running,
 # with a username/password set in its options.
@@ -19,9 +20,12 @@
 # when you want the Update button on an installed copy.
 set -euo pipefail
 
-HA_HOST="${1:?usage: dev-sync.sh <ha-host> <samba-user> <samba-password>}"
-SMB_USER="${2:?missing samba user}"
-SMB_PASS="${3:?missing samba password}"
+ENV_FILE="${HOME}/.ha-dev-sync.env"
+[ -f "${ENV_FILE}" ] && . "${ENV_FILE}"
+
+HA_HOST="${HA_HOST:?set HA_HOST in ${ENV_FILE} or the environment}"
+SMB_USER="${SMB_USER:?set SMB_USER in ${ENV_FILE} or the environment}"
+SMB_PASS="${SMB_PASS:?set SMB_PASS in ${ENV_FILE} or the environment}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
