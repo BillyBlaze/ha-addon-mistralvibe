@@ -6,7 +6,8 @@
 # Usage:
 #   scripts/dev-sync.sh <ha-host> <samba-user> <samba-password>
 # Example:
-#   scripts/dev-sync.sh HA-HOST SMB-USER REDACTED-PASSWORD
+#   scripts/dev-sync.sh <ha-host> <samba-user> <samba-password>
+#   (never commit real hostnames, usernames or passwords — use placeholders)
 #
 # Prereq on the HA host: the official Samba share app installed and running,
 # with a username/password set in its options.
