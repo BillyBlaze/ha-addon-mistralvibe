@@ -75,6 +75,8 @@ async def handle_task(client_r, client_w, header):
                 length = int(line.split(b':', 1)[1].strip())
             except ValueError:
                 length = 0
+    sep = b"\r\n\r\n"
+    print(f"DEBUG /task len={length} chunked={b'transfer-encoding: chunked' in header.lower()} buffered={len(header.partition(sep)[2])}", flush=True)
     # the first read may already have buffered part (or all) of the body
     body = header.partition(b'\r\n\r\n')[2]
     try:
