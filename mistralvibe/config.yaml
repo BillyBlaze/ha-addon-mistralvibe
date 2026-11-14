@@ -43,10 +43,10 @@ host_network: false
 host_pid: false
 host_dbus: false
 full_access: false
-# s6's init chowns/chmods the service scripts it copies to /run/s6 at boot;
-# without CAP_CHOWN in the bounding set those fail with EPERM (harmless but noisy)
-privileged:
-  - CHOWN
+# Note: s6-init logs "s6-chown/chmod: Permission denied" for /run/s6 copies at
+# boot — cosmetic only. The Supervisor's reduced default capability set drops
+# CAP_CHOWN and CHOWN is not an allowed `privileged` value, so it can't be
+# re-added; services still start fine.
 
 # --- App options (shown in HA UI) -------------------------------------------
 options:
