@@ -120,7 +120,10 @@ directly in a Vibe session if you want full control.
 The proxy on :7681 routes by User-Agent (mobile → :7683, everything else →
 :7682), strips cache headers, and exposes `POST /task` (bearer-token protected),
 which appends to `/data/vibe/task-queue.jsonl` — tailed by `vibe-stdin-runner`
-into a `vibe --auto-approve --prompt ...` run.
+(`tail -n 0 -F`: new lines only, so an app restart does not replay tasks that
+already ran) into a `vibe --auto-approve --prompt ...` run. One task runs at a
+time; further `POST /task` calls while one is running are rejected with a
+`mistralvibe_run_rejected` event.
 
 `vibe-launcher` is the entry-point that loads the API key from `.env`,
 applies the `auto_approve` / `default_agent` flags from app options and

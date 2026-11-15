@@ -4,4 +4,7 @@
 # init, so hassio.addon_stdin delivery doesn't reach us).
 mkdir -p /data/vibe
 touch /data/vibe/task-queue.jsonl
-tail -n +1 -F /data/vibe/task-queue.jsonl | /usr/local/bin/vibe-stdin-runner
+# -n 0: follow only NEW lines. -n +1 would replay the whole queue file on every
+# service start, re-running already-completed tasks after each app restart
+# (and the runner would reject the duplicates with "one is already running").
+tail -n 0 -F /data/vibe/task-queue.jsonl | /usr/local/bin/vibe-stdin-runner

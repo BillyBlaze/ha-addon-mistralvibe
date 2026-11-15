@@ -8,6 +8,7 @@
 
 ### Fixed
 - Ingress proxy no longer logs the Docker HEALTHCHECK probes (healthcheck now sends `User-Agent: vibe-healthcheck`, which the proxy access log skips) — removes the `[proxy] GET /` line every 30 s from the app log
+- `vibe-tasks` service now tails the task queue with `tail -n 0 -F` (new lines only) instead of `tail -n +1 -F`: previously every app restart replayed the whole `/data/vibe/task-queue.jsonl`, re-running already-completed `POST /task` tasks and logging "rejected incoming task, one is already running" for the duplicates
 
 ## 1.0.0-beta3 — 2026-11-15
 
