@@ -1,0 +1,40 @@
+name: Build (test only)
+
+# No images are published: the app is source-only — the Supervisor builds the
+# Dockerfile on the HA host (store repo or Samba local_apps), cached after the
+# first build. This workflow only proves the Dockerfile builds on both
+# architectures on every PR and push. Publishing to a registry would be an
+# install-speed optimization only; add image:/build.yaml/tag publishing later
+# if that ever becomes worth it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test-build (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, aarch64]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pin verified to exist on ghcr (2026.03.2). An arbitrary pin breaks the
+      # build with "not found"; @master silently falls back to an older builder
+      # image. Confirm the image exists before changing this SHA:
+      #   ghcr.io/home-assistant/amd64-builder:<sha>
+      #   ghcr.io/home-assistant/aarch64-builder:<sha>
+      - name: Build add-on (test, no publish)
+        uses: home-assistant/builder@62a1597b84b3461abad9816d9cd92862a2b542c3  # 2026.03.2
+        with:
+          args: |
+            --test \
+            --${{ matrix.arch }} \
+            --target mistralvibe

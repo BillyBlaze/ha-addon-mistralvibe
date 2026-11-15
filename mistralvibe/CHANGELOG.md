@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0-beta4 — 2026-11-15
+
+### Added
+- New option `mcp_source` (`builtin` default | `external`): with `external`, Vibe connects to an external ha-mcp server (e.g. the HA-MCP HACS integration, with its GUI / read-only mode / tool selection) via `external_mcp_url` plus optional `external_mcp_token`. The token is sent as `Authorization: Bearer` through Vibe's `api_key_env` and stored only in `/data/vibe/.env` — never in `config.toml`. In external mode the in-container ha-mcp service stays alive as a no-op (`sleep infinity`, logged once per boot — an exiting longrun service would restart-loop and spam the log) and the healthcheck skips the :9584 probe (healthcheck moved to `rootfs/usr/local/bin/healthcheck.sh`, mode-aware). One app, one image — no duplicated variant, no registry publishing; the app stays source-only
+- CI: new `build.yml` test-builds the Dockerfile on amd64+aarch64 for every PR/push (publishes nothing, no ghcr permissions)
+
 ## 1.0.0-beta3 — 2026-11-15
 
 ### Changed

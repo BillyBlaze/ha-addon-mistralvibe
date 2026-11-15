@@ -1,5 +1,5 @@
 name: Mistral Vibe
-version: "1.0.0-beta3"
+version: "1.0.0-beta4"
 slug: mistralvibe
 description: >-
   Run Mistral Vibe CLI directly inside Home Assistant.
@@ -74,6 +74,9 @@ options:
   task_token: ""
   auto_launch: "new"
   working_directory: "/config"
+  mcp_source: "builtin"
+  external_mcp_url: ""
+  external_mcp_token: ""
 
 schema:
   mistral_api_key: password
@@ -92,6 +95,9 @@ schema:
   task_token: password
   auto_launch: list(off|new|continue)?
   working_directory: str?
+  mcp_source: list(builtin|external)?
+  external_mcp_url: str?
+  external_mcp_token: password
 
 # --- Startup -----------------------------------------------------------------
 # apparmor stays enabled (default true) and boot stays "auto" — both are

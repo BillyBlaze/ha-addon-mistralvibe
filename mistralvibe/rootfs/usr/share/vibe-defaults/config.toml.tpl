@@ -27,10 +27,12 @@ backend = "mistral"
 
 __MODELS_BLOCK__
 
-# ha-mcp (homeassistant-ai/ha-mcp) runs as a local loopback-only service in
-# this container (services.d/ha-mcp, 127.0.0.1:9584) and gets the Supervisor
-# token via its own env — no credential is stored in this file.
+# The MCP server is chosen at startup from the mcp_source option:
+#   builtin  -> local ha-mcp-web on 127.0.0.1:9584 (loopback only; gets the
+#               Supervisor token via its own env, no credential in this file)
+#   external -> the URL from external_mcp_url (e.g. the HA-MCP HACS integration)
 [[mcp_servers]]
 name = "hass"
 transport = "streamable-http"
-url = "http://127.0.0.1:9584/mcp"
+url = "__MCP_URL__"
+__MCP_AUTH_BLOCK__

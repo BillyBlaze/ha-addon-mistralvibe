@@ -46,19 +46,25 @@ import sys, pathlib, tomllib
 
 tpl = pathlib.Path(sys.argv[1]) / "rootfs/usr/share/vibe-defaults/config.toml.tpl"
 text = tpl.read_text()
-for ph in ("__ACTIVE_MODEL__",):
+for ph in ("__ACTIVE_MODEL__", "__MCP_URL__"):
     assert ph in text, f"placeholder {ph} missing from template"
-    text = text.replace(ph, "x")
+    text = text.replace(ph, "x" if ph == "__ACTIVE_MODEL__" else "http://127.0.0.1:9584/mcp")
 # the init script substitutes __MODELS_BLOCK__ with real [[models]] tables
 assert "__MODELS_BLOCK__" in text, "placeholder __MODELS_BLOCK__ missing from template"
 text = text.replace("__MODELS_BLOCK__", '[[models]]\nname = "x"\nprovider = "x"\nalias = "x"')
-# no credential placeholders may remain — the Supervisor token goes to the
-# local ha-mcp service env only, never into config.toml
-for stale in ("__HA_URL__", "__HA_TOKEN__", "HA_TOKEN", "HOMEASSISTANT_TOKEN"):
+# __MCP_AUTH_BLOCK__ is either empty or a [mcp_servers.auth] static block —
+# both must render to valid TOML
+assert "__MCP_AUTH_BLOCK__" in text, "placeholder __MCP_AUTH_BLOCK__ missing from template"
+auth_block = ('[mcp_servers.auth]\ntype = "static"\napi_key_env = "EXTERNAL_MCP_TOKEN"\n'
+              'api_key_header = "Authorization"\napi_key_format = "Bearer {token}"')
+for auth in ("", auth_block):
+    cfg = tomllib.loads(text.replace("__MCP_AUTH_BLOCK__", auth))
+    assert cfg["models"][0]["alias"] == "x" == cfg["active_model"]
+    assert cfg["mcp_servers"][0]["url"] == "http://127.0.0.1:9584/mcp"
+# no credential placeholders may remain — tokens go to .env / service env only
+for stale in ("__HA_URL__", "__HA_TOKEN__", "HA_TOKEN", "HOMEASSISTANT_TOKEN", "EXTERNAL_MCP_TOKEN = "):
     assert stale not in text, f"stale credential placeholder {stale} in template"
-cfg = tomllib.loads(text)
-assert cfg["models"][0]["alias"] == "x" == cfg["active_model"]
-print("OK: config.toml template renders to valid TOML")
+print("OK: config.toml template renders to valid TOML (with and without auth block)")
 PY
 
 echo "ALL SMOKE CHECKS PASSED"

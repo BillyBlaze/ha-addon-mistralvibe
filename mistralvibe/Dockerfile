@@ -122,6 +122,7 @@ COPY rootfs/ /
 RUN chmod a+x \
         /usr/bin/vibe-launcher \
         /usr/local/bin/vibe-stdin-runner \
+        /usr/local/bin/healthcheck.sh \
         /etc/cont-init.d/10-init-vibe.sh \
         /etc/services.d/vibe-terminal/run \
         /etc/services.d/vibe-terminal/finish \
@@ -132,11 +133,10 @@ RUN chmod a+x \
 
 ENTRYPOINT ["/init"]
 
-# probe the proxy, both ttyd backends and the local ha-mcp server — a dead
-# component behind a healthy proxy must still fail the healthcheck
-# (ha-mcp exposes an unauthenticated /healthz on loopback via MCP_HEALTHZ=true)
+# probe the proxy, both ttyd backends and (builtin MCP mode only) the local
+# ha-mcp server — a dead component behind a healthy proxy must still fail
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -sf http://localhost:7681/ && curl -sf http://localhost:7682/ && curl -sf http://localhost:7683/ && curl -sf http://localhost:9584/healthz || exit 1
+    CMD /usr/local/bin/healthcheck.sh
 
 LABEL \
     io.hass.name="Mistral Vibe" \

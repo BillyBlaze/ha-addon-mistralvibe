@@ -148,7 +148,37 @@ if [ -z "${TASK_TOKEN}" ] || [ "${TASK_TOKEN}" = "null" ]; then
     fi
 fi
 printf 'TASK_TOKEN=%s\n' "${TASK_TOKEN}" >> "${ENV_FILE}"
+# optional bearer token for an EXTERNAL MCP server (mcp_source=external);
+# referenced from config.toml via api_key_env, so it never lands in the file
+EXTERNAL_MCP_TOKEN="$(bashio::config 'external_mcp_token')"
+printf 'EXTERNAL_MCP_TOKEN=%s\n' "${EXTERNAL_MCP_TOKEN}" >> "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
+
+# MCP server selection: builtin (local loopback ha-mcp) or external URL
+MCP_SOURCE="$(bashio::config 'mcp_source')"
+if [ -z "${MCP_SOURCE}" ] || [ "${MCP_SOURCE}" = "null" ]; then
+    MCP_SOURCE="builtin"
+fi
+EXTERNAL_MCP_URL="$(bashio::config 'external_mcp_url')"
+if [ "${MCP_SOURCE}" = "builtin" ]; then
+    MCP_URL="http://127.0.0.1:9584/mcp"
+    MCP_AUTH_BLOCK=""
+elif [ -z "${EXTERNAL_MCP_URL}" ] || [ "${EXTERNAL_MCP_URL}" = "null" ]; then
+    bashio::log.fatal "mcp_source=external requires 'external_mcp_url' (the external ha-mcp server's MCP endpoint)."
+    exit 1
+else
+    MCP_URL="${EXTERNAL_MCP_URL}"
+    if [ -n "${EXTERNAL_MCP_TOKEN}" ] && [ "${EXTERNAL_MCP_TOKEN}" != "null" ]; then
+        MCP_AUTH_BLOCK='[mcp_servers.auth]
+type = "static"
+api_key_env = "EXTERNAL_MCP_TOKEN"
+api_key_header = "Authorization"
+api_key_format = "Bearer {token}"'
+    else
+        MCP_AUTH_BLOCK=""
+    fi
+    bashio::log.info "Using external MCP server: ${MCP_URL}"
+fi
 
 if [ -z "${ACTIVE_MODEL}" ] || [ "${ACTIVE_MODEL}" = "null" ]; then
     bashio::log.fatal "No 'active_model' configured."
@@ -166,9 +196,9 @@ bashio::log.info "Writing Vibe config to ${CONFIG_FILE}"
 # decides them per model (and ships with auto_update_cli). When the API is
 # unreachable we do NOT fall back to a cache (a stale catalog is worse than a
 # short one): warn and register only the active model as-is.
-python3 - "${CONFIG_FILE}" "${ACTIVE_MODEL}" "${MODELS_JSON_FILE}" <<'PY'
+python3 - "${CONFIG_FILE}" "${ACTIVE_MODEL}" "${MODELS_JSON_FILE}" "${MCP_URL}" "${MCP_AUTH_BLOCK}" <<'PY'
 import sys, json, pathlib
-config_path, active, models_json_path = sys.argv[1:4]
+config_path, active, models_json_path, mcp_url, mcp_auth_block = sys.argv[1:6]
 tpl = pathlib.Path("/usr/share/vibe-defaults/config.toml.tpl").read_text()
 
 entries = []  # (alias, api_id)
@@ -225,7 +255,9 @@ for alias, mid in entries:
 
 text = (tpl
         .replace("__ACTIVE_MODEL__", active_alias)
-        .replace("__MODELS_BLOCK__", "\n".join(blocks)))
+        .replace("__MODELS_BLOCK__", "\n".join(blocks))
+        .replace("__MCP_URL__", mcp_url)
+        .replace("__MCP_AUTH_BLOCK__", mcp_auth_block))
 pathlib.Path(config_path).write_text(text)
 print(f"Active model: {active_alias} (api id: {rid}); registered {len(entries)} model(s) from {'live API' if api_ok else 'active_model only'}", file=sys.stderr)
 PY

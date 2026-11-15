@@ -80,6 +80,27 @@ configuration:
     description: >-
       Verzeichnis, in dem Vibe startet (und headless Aufgaben laufen). Muss ein
       gemapptes Verzeichnis sein, z. B. /config, /share oder /media.
+  mcp_source:
+    name: MCP-Server-Quelle
+    description: >-
+      "builtin" startet einen lokalen ha-mcp-Server in dieser App (nur
+      Loopback). "external" verbindet Vibe mit einem externen ha-mcp-Server —
+      z. B. der HA-MCP-HACS-Integration mit GUI, Read-only-Modus und
+      Tool-Auswahl.
+  external_mcp_url:
+    name: Externe MCP-URL
+    description: >-
+      Streamable-HTTP-MCP-Endpunkt des externen ha-mcp-Servers, nur genutzt bei
+      MCP-Server-Quelle "external" — z. B. die private URL der HA-MCP-Integration
+      (http://<ha-ip>:9584/private_.../mcp). In external Pflicht. Wird in
+      /data/vibe/config.toml (chmod 600) gespeichert — die URL kann einen
+      geheimen Pfad enthalten.
+  external_mcp_token:
+    name: Externes MCP-Token
+    description: >-
+      Optionales Bearer-Token für den externen MCP-Server (Authorization:
+      Bearer ...). Leer lassen bei Secret-Path-URLs. Wird in /data/vibe/.env
+      gespeichert, nie in config.toml.
 
 network:
   7681/tcp: Web-Terminal (nur Ingress — kein Host-Port nötig)

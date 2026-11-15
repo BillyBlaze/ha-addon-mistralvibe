@@ -74,6 +74,9 @@ internally to authenticate the custom MCP server against Home Assistant Core.
 | `default_task_model` | *(empty)* | Model for headless tasks sent to `POST /task`. Empty = the app's `active_model`. |
 | `task_max_runtime_minutes` | `30` | Max runtime of a headless task (1-240 min) before it is killed. |
 | `task_token` | *(empty = random, persisted)* | Bearer token required for `POST /task`. Empty generates a random one on first boot into `/data/vibe/.env` and reuses it across restarts/updates (read it in the app terminal: `grep TASK_TOKEN /data/vibe/.env`). Set your own for a stable, automation-friendly value. |
+| `mcp_source` | `builtin` | Where Vibe gets its HA tools: `builtin` runs a local ha-mcp server inside this app (loopback only); `external` connects to your own ha-mcp server — see below. |
+| `external_mcp_url` | *(empty)* | Streamable-HTTP MCP endpoint of the external ha-mcp server (required when `mcp_source: external`), e.g. the HA-MCP HACS integration's private URL. |
+| `external_mcp_token` | *(empty)* | Optional bearer token for the external MCP server (`Authorization: Bearer …`). Leave empty for secret-path URLs. Stored in `/data/vibe/.env`, never in `config.toml`. |
 
 Every option above maps 1:1 to a key the init script writes into
 `/data/vibe/config.toml` or `/data/vibe/.env` — so you can also edit them
@@ -121,12 +124,25 @@ into a `vibe --auto-approve --prompt ...` run.
 
 `vibe-launcher` is the entry-point that loads the API key from `.env`,
 applies the `auto_approve` / `default_agent` flags from app options and
-execs the CLI. The HA bridge is [ha-mcp](https://github.com/homeassistant-ai/ha-mcp)
-(`ha-mcp-web`), run as a loopback-only service inside this container on
-`127.0.0.1:9584`; Vibe connects via `[[mcp_servers]] transport = "streamable-http"`
-in `config.toml`. The service gets `HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN`
-(the Supervisor token) from `/data/vibe/.env` — no credential is stored in
-`config.toml`.
+execs the CLI. The HA bridge is [ha-mcp](https://github.com/homeassistant-ai/ha-mcp).
+In the default `builtin` mode, `ha-mcp-web` runs as a loopback-only service
+inside this container on `127.0.0.1:9584`; Vibe connects via
+`[[mcp_servers]] transport = "streamable-http"` in `config.toml`. The service
+gets `HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN` (the Supervisor token) from
+`/data/vibe/.env` — no credential is stored in `config.toml`.
+
+## External MCP mode
+
+Set `mcp_source: external` and `external_mcp_url` to use your own ha-mcp server
+instead — typically the **HA-MCP HACS integration**, which adds a settings GUI,
+read-only mode and per-tool selection. Get the URL from the integration's
+**Configure** screen (its private URL, e.g. `http://<ha-ip>:9584/private_…/mcp`,
+with *Network access: Local network* enabled in the integration). The in-container
+ha-mcp service is not started in this mode. If the external server requires a
+bearer token instead of a secret path, set `external_mcp_token` — it is sent as
+`Authorization: Bearer …` via `api_key_env` and stored only in `/data/vibe/.env`.
+Note: the URL itself (which may embed a secret path) is written to
+`/data/vibe/config.toml` (chmod 600, inside the app container only).
 
 ## Headless tasks from automations
 
@@ -194,6 +210,7 @@ fully supported.
 - **`ha_restart`** — can restart HA without confirmation when `auto_approve: true` is set. By default `auto_approve: false`.
 - **AppArmor** — enabled. The profile grants only the capabilities s6/ttyd need (no `net_admin`/`net_raw`), limits networking to TCP/UDP/unix sockets, and allows writes only under `/data`, `/config`, `/share`, `/media`, `/root`, `/tmp`, `/usr/local` and `/opt` (the latter two so Vibe CLI self-updates work); everything else is read-only or denied.
 - **Headless task endpoint** — `POST /task` on the ingress port requires `Authorization: Bearer <task_token>` (403 otherwise) and caps the body at 1 MB. Without this, any other add-on on the hassio network could enqueue a task that runs `vibe --auto-approve` as root with `/config` mounted read-write.
+- **External MCP mode** — in `mcp_source: external` the app forwards all HA tool calls to your external ha-mcp server; anyone who can reach *that* server's URL can drive HA through it. Use the integration's local-network/private URL (not a public remote URL) and keep its access restricted.
 - **`auto_approve: false`** — the default. Vibe asks before every tool call. Only enable it if you know what you are doing.
 
 ## Differences vs. the Claude Code app

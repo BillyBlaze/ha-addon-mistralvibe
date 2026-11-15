@@ -13,6 +13,16 @@ if [ -f "${VIBE_HOME}/.env" ]; then
 fi
 export HOMEASSISTANT_URL="${HA_URL:-http://supervisor/core}"
 export HOMEASSISTANT_TOKEN="${HA_TOKEN:-}"
+
+# mcp_source=external: Vibe talks to the external MCP server instead — don't
+# start the built-in one (the image still ships it, it just stays unused).
+# Stay alive as a no-op: a longrun service that exits would restart in a loop
+# and spam the log once per second.
+MCP_SOURCE="$(jq -r '.mcp_source // "builtin"' /data/options.json 2>/dev/null || echo builtin)"
+if [ "${MCP_SOURCE}" != "builtin" ]; then
+    bashio::log.info "mcp_source=${MCP_SOURCE} — built-in ha-mcp disabled (external MCP in use)"
+    exec sleep infinity
+fi
 # bind loopback only (upstream defaults to 0.0.0.0:8086), fixed port, an
 # unauthenticated /healthz liveness route for our HEALTHCHECK, and no web
 # settings UI — env vars are the supported knobs (no CLI flags on ha-mcp-web)
