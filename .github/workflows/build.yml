@@ -30,11 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Read app version
-        id: version
+      - name: Build metadata
+        id: meta
         run: |
           v=$(sed -n 's/^version: "\(.*\)"/\1/p' mistralvibe/config.yaml)
+          # docker repository names must be lowercase; github.repository_owner
+          # can contain uppercase ("BillyBlaze") and would fail the tag parse
+          owner=$(echo '${{ github.repository_owner }}' | tr 'A-Z' 'a-z')
           echo "version=${v}" >> "$GITHUB_OUTPUT"
+          echo "owner=${owner}" >> "$GITHUB_OUTPUT"
 
       # QEMU so RUN steps work when cross-building aarch64 on an amd64 runner
       - uses: docker/setup-qemu-action@v3
@@ -47,9 +51,9 @@ jobs:
         uses: home-assistant/builder/actions/build-image@62a1597b84b3461abad9816d9cd92862a2b542c3 # 2026.03.2
         with:
           arch: ${{ matrix.arch }}
-          image: ghcr.io/${{ github.repository_owner }}/mistralvibe
-          image-tags: ${{ steps.version.outputs.version }}
-          version: ${{ steps.version.outputs.version }}
+          image: ghcr.io/${{ steps.meta.outputs.owner }}/mistralvibe
+          image-tags: ${{ steps.meta.outputs.version }}
+          version: ${{ steps.meta.outputs.version }}
           # required inputs, but unused while push=false (no login happens)
           container-registry-username: ${{ github.actor }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
