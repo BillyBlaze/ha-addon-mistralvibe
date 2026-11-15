@@ -89,7 +89,8 @@ async def handle(client_r, client_w):
     port = 7683 if is_mobile(header) else 7682
     ua = re.search(b'User-Agent: ([^\r\n]+)', header, re.IGNORECASE)
     ua_str = ua.group(1).decode('utf-8', 'replace') if ua else '(none)'
-    print(f"[proxy] {request_line} -> port {port} | UA: {ua_str}", flush=True)
+    if not ua_str.startswith('vibe-healthcheck'):
+        print(f"[proxy] {request_line} -> port {port} | UA: {ua_str}", flush=True)
 
     for attempt in range(5):
         try:
