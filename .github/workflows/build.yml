@@ -48,7 +48,7 @@ jobs:
       # changing it: home-assistant/builder tree at that ref must contain
       # actions/build-image/action.yml.
       - name: Build image (test, no publish)
-        uses: home-assistant/builder/actions/build-image@62a1597b84b3461abad9816d9cd92862a2b542c3 # 2026.03.2
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           arch: ${{ matrix.arch }}
           image: ghcr.io/${{ steps.meta.outputs.owner }}/mistralvibe
