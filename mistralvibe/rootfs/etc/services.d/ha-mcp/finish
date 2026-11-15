@@ -1,0 +1,2 @@
+#!/usr/bin/with-contenv bashio
+pkill -f ha-mcp-web 2>/dev/null || true

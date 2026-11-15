@@ -3,7 +3,7 @@
 Run [Mistral Vibe CLI](https://github.com/mistralai/mistral-vibe) (Mistral AI's
 open-source agentic coding agent, running on Mistral's current model catalog)
 directly inside Home Assistant. Terminal in the sidebar, full HA API access
-through a custom MCP server, persistent state under `/data/vibe`.
+through [ha-mcp](https://github.com/homeassistant-ai/ha-mcp) (86 tools) over a loopback-only HTTP service, persistent state under `/data/vibe`.
 
 ## Quick start
 

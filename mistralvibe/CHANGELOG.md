@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0-beta3 — 2026-11-15
+
+### Changed
+- HA bridge is now [homeassistant-ai/ha-mcp](https://github.com/homeassistant-ai/ha-mcp) (86 E2E-tested tools) instead of the built-in 9-tool server: `ha-mcp-web` runs as a loopback-only service in this container (`MCP_HOST=127.0.0.1`, `MCP_PORT=9584`, settings UI off, `/healthz` on for the healthcheck) and Vibe connects via `[[mcp_servers]] transport = "streamable-http"` — upstream recommends HTTP over stdio (stdio has known transport issues, ha-mcp#1713). New pin: `ha-mcp==9.2.0` on Python 3.14 (`uv tool install`)
+- The Supervisor token is no longer written to `/data/vibe/config.toml` — it lives in `/data/vibe/.env` (chmod 600) and is passed only to the local ha-mcp process env (`HOMEASSISTANT_URL`/`HOMEASSISTANT_TOKEN`)
+- Dockerfile: dropped the now-unused `fastmcp`/`httpx` pip install (only the removed custom server needed it); HEALTHCHECK also probes the ha-mcp port 9584
+- `ha.md` system prompt rewritten for ha-mcp tool names (`ha_search`, `ha_get_logs`, `ha_config_get/set_*`, `ha_get_overview`, …); STRICT RULES preserved (logs only on explicit request with a line limit, filtered entity queries, file-size checks)
+- Removed `rootfs/usr/share/ha-mcp/server.py`; smoke test no longer compiles it and now asserts no credential placeholders remain in the config template
+
 ## 1.0.0-beta2 — 2026-11-15
 
 ### Security

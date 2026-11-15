@@ -34,7 +34,7 @@ cat <<'BANNER'
 
   Mistral Vibe CLI inside Home Assistant
   Working dir : /config        (your HA config)
-  HA bridge   : custom MCP server
+  HA bridge   : ha-mcp (loopback HTTP, 127.0.0.1:9584)
   State dir   : /data/vibe     (config + history persist here)
 
   Type:  vibe                  start an interactive session

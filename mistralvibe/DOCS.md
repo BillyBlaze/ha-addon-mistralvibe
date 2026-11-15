@@ -106,11 +106,11 @@ directly in a Vibe session if you want full control.
                               │        └─ vibe-launcher  │
                               │           └─ mistral-vibe│
                               └──────────┬───────────────┘
-                                         │ stdio
+                                         │ streamable-http (127.0.0.1:9584)
                                          ▼
                               ┌──────────────────────────┐
-                              │  custom MCP server       │  ──REST──▶  HA Core
-                              │  (server.py + fastmcp)   │   /api/states
+                              │  ha-mcp-web :9584        │  ──REST──▶  HA Core
+                              │  (ha-mcp, loopback only) │   /api/states
                               └──────────────────────────┘   /api/services
 ```
 
@@ -121,7 +121,12 @@ into a `vibe --auto-approve --prompt ...` run.
 
 `vibe-launcher` is the entry-point that loads the API key from `.env`,
 applies the `auto_approve` / `default_agent` flags from app options and
-execs the CLI. The custom MCP server (`/usr/share/ha-mcp/server.py`) is started on demand by Vibe as a stdio child process. It receives `HA_URL` and `HA_TOKEN` via `[mcp_servers.env]` in `config.toml`.
+execs the CLI. The HA bridge is [ha-mcp](https://github.com/homeassistant-ai/ha-mcp)
+(`ha-mcp-web`), run as a loopback-only service inside this container on
+`127.0.0.1:9584`; Vibe connects via `[[mcp_servers]] transport = "streamable-http"`
+in `config.toml`. The service gets `HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN`
+(the Supervisor token) from `/data/vibe/.env` — no credential is stored in
+`config.toml`.
 
 ## Headless tasks from automations
 
@@ -183,7 +188,7 @@ fully supported.
 ## Security notes
 
 - **Mistral API key** — stored in `/data/vibe/.env` (chmod 600, root-readable only).
-- **HA Supervisor token** — sits in plaintext in `/data/vibe/config.toml` under `[mcp_servers.env]`. That is a deliberate trade-off: Vibe does not inherit the shell environment into MCP child processes, so the token has to be passed explicitly. `/data/vibe/config.toml` is only accessible inside the app container.
+- **HA Supervisor token** — stored in `/data/vibe/.env` (chmod 600) and passed only to the loopback ha-mcp process environment (`HOMEASSISTANT_TOKEN`). It is not written to `config.toml` or anywhere on the network-reachable config.
 - **`hassio_role: manager`** — the app has the same Supervisor access as the official Studio Code Server app. This is required so the MCP server can manage entities, services and automations.
 - **`ha_call_service`** — the MCP server can call any HA service, including destructive ones like `homeassistant.stop`. For read-only inspection, use `default_agent: plan`.
 - **`ha_restart`** — can restart HA without confirmation when `auto_approve: true` is set. By default `auto_approve: false`.
@@ -199,7 +204,7 @@ fully supported.
 | Default model | Claude Sonnet | Mistral Medium (latest) |
 | Auth | Anthropic OAuth (long URL flow) | Mistral API key in app options |
 | Local inference | No | Yes (via Ollama / vLLM / on-prem) |
-| HA bridge | hass-mcp via stdio | custom FastMCP server via stdio |
+| HA bridge | hass-mcp via stdio | [ha-mcp](https://github.com/homeassistant-ai/ha-mcp) (86 tools) via loopback HTTP |
 | Web UI | ttyd terminal in ingress | ttyd terminal in ingress |
 | State dir | `/data/claude` | `/data/vibe` |
 

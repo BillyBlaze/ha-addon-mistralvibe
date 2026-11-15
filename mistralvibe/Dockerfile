@@ -103,11 +103,13 @@ RUN case "${BUILD_ARCH}" in \
 # identical (a floating install can break on a bad upstream release).
 # Runtime updates of the Vibe CLI itself are handled by auto_update_cli
 # (writes to /usr/local/bin, which AppArmor allows).
+# ha-mcp (the Home Assistant MCP server, homeassistant-ai/ha-mcp) requires
+# Python 3.14; mistral-vibe stays on 3.13.
 RUN curl -LsSf https://astral.sh/uv/install.sh \
       | env UV_INSTALL_DIR=/usr/local/bin sh \
- && uv python install 3.13 \
+ && uv python install 3.13 3.14 \
  && uv tool install --python 3.13 mistral-vibe==3.1.2 \
- && python3 -m pip install --break-system-packages --no-cache-dir fastmcp==4.2.0 httpx==0.28.1 \
+ && uv tool install --python 3.14 ha-mcp==9.2.0 \
  && rm -rf /root/.cache /tmp/*
 
 # ---- Home Assistant CLI -----------------------------------------------------
@@ -124,14 +126,17 @@ RUN chmod a+x \
         /etc/services.d/vibe-terminal/run \
         /etc/services.d/vibe-terminal/finish \
         /etc/services.d/vibe-tasks/run \
-        /etc/services.d/vibe-tasks/finish
+        /etc/services.d/vibe-tasks/finish \
+        /etc/services.d/ha-mcp/run \
+        /etc/services.d/ha-mcp/finish
 
 ENTRYPOINT ["/init"]
 
-# probe the proxy AND both ttyd backends — a dead ttyd behind a healthy
-# proxy must still fail the healthcheck
+# probe the proxy, both ttyd backends and the local ha-mcp server — a dead
+# component behind a healthy proxy must still fail the healthcheck
+# (ha-mcp exposes an unauthenticated /healthz on loopback via MCP_HEALTHZ=true)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -sf http://localhost:7681/ && curl -sf http://localhost:7682/ && curl -sf http://localhost:7683/ || exit 1
+    CMD curl -sf http://localhost:7681/ && curl -sf http://localhost:7682/ && curl -sf http://localhost:7683/ && curl -sf http://localhost:9584/healthz || exit 1
 
 LABEL \
     io.hass.name="Mistral Vibe" \

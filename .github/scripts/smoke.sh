@@ -15,8 +15,8 @@ for f in "${SH_SCRIPTS[@]}"; do
 done
 echo "OK: shell syntax (${#SH_SCRIPTS[@]} scripts)"
 
-# 2. Python syntax: MCP server + proxy
-for f in "${ADDON}/rootfs/usr/share/ha-mcp/server.py" "${ADDON}/rootfs/usr/share/vibe-proxy/proxy.py"; do
+# 2. Python syntax: ingress proxy
+for f in "${ADDON}/rootfs/usr/share/vibe-proxy/proxy.py"; do
     python3 -m py_compile "$f" || fail "py_compile: $f"
 done
 echo "OK: python syntax"
@@ -46,12 +46,16 @@ import sys, pathlib, tomllib
 
 tpl = pathlib.Path(sys.argv[1]) / "rootfs/usr/share/vibe-defaults/config.toml.tpl"
 text = tpl.read_text()
-for ph in ("__ACTIVE_MODEL__", "__HA_URL__", "__HA_TOKEN__"):
+for ph in ("__ACTIVE_MODEL__",):
     assert ph in text, f"placeholder {ph} missing from template"
     text = text.replace(ph, "x")
 # the init script substitutes __MODELS_BLOCK__ with real [[models]] tables
 assert "__MODELS_BLOCK__" in text, "placeholder __MODELS_BLOCK__ missing from template"
 text = text.replace("__MODELS_BLOCK__", '[[models]]\nname = "x"\nprovider = "x"\nalias = "x"')
+# no credential placeholders may remain — the Supervisor token goes to the
+# local ha-mcp service env only, never into config.toml
+for stale in ("__HA_URL__", "__HA_TOKEN__", "HA_TOKEN", "HOMEASSISTANT_TOKEN"):
+    assert stale not in text, f"stale credential placeholder {stale} in template"
 cfg = tomllib.loads(text)
 assert cfg["models"][0]["alias"] == "x" == cfg["active_model"]
 print("OK: config.toml template renders to valid TOML")

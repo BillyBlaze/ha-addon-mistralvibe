@@ -1,0 +1,25 @@
+#!/usr/bin/with-contenv bashio
+# ha-mcp (homeassistant-ai/ha-mcp) as a LOCAL streamable-HTTP MCP server on
+# loopback only. Vibe connects via [[mcp_servers]] transport="streamable-http"
+# in /data/vibe/config.toml. Upstream recommends HTTP over stdio (stdio has
+# known transport issues, ha-mcp#1713). The Supervisor token never leaves the
+# container: it is handed to this loopback-only process via env, and is no
+# longer stored in config.toml.
+export VIBE_HOME=/data/vibe
+if [ -f "${VIBE_HOME}/.env" ]; then
+    set -a
+    . "${VIBE_HOME}/.env"
+    set +a
+fi
+export HOMEASSISTANT_URL="${HA_URL:-http://supervisor/core}"
+export HOMEASSISTANT_TOKEN="${HA_TOKEN:-}"
+# bind loopback only (upstream defaults to 0.0.0.0:8086), fixed port, an
+# unauthenticated /healthz liveness route for our HEALTHCHECK, and no web
+# settings UI — env vars are the supported knobs (no CLI flags on ha-mcp-web)
+export MCP_HOST=127.0.0.1
+export MCP_PORT=9584
+export MCP_HEALTHZ=true
+export HA_MCP_DISABLE_SETTINGS_UI=1
+
+bashio::log.info "Starting ha-mcp web server on 127.0.0.1:9584/mcp"
+exec ha-mcp-web

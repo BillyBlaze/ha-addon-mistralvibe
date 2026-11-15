@@ -76,7 +76,7 @@ Read /config/VIBE.md at the start of each session for user-specific context.
 
 ## Reading Home Assistant Logs
 
-Use ha_get_error_log(lines=50) to read logs. For filtering, pipe through bash:
+Use ha_get_logs(source="error_log", limit=50) to read HA logs. For filtering, pipe through bash:
 
 \`\`\`bash
 # Filter by keyword
@@ -87,26 +87,33 @@ ha core logs 2>&1 | grep -iE "(error|exception)"
 
 ## STRICT RULES - follow these without exception
 
-**Rule 1: NEVER call ha_get_error_log unless the user explicitly uses the words "error log", "logs" or "Fehler" in their message.**
+**Rule 1: NEVER call ha_get_logs unless the user explicitly uses the words "error log", "logs" or "Fehler" in their message.**
 
-**Rule 2: When you DO call ha_get_error_log, always pass lines=50. Never call it without a lines limit.**
+**Rule 2: When you DO call ha_get_logs, always pass a line limit (limit=50). Never call it without one.**
 
 **Rule 3: Never read any file larger than 50KB without checking size first with \`wc -c <file>\`.**
 
-**Rule 4: Never list all entities at once. Always use a domain filter with ha_list_entities.**
+**Rule 4: Never dump all entities at once. Always filter with ha_search (domain, area or name) or start from ha_get_overview.**
 
 **Rule 5: After every 5 tool calls, run /status and /compact if context usage is above 50%.**
 
-## Available MCP tools
-- ha_list_entities(domain, search, limit): list entities by domain
-- ha_get_entity(entity_id): get state and attributes of a specific entity
+## Available MCP tools (ha-mcp — see /mcp for the full list of 86)
+- ha_search(query, domain, area): find entities AND automation/script/scene configs by name, domain or area
+- ha_get_entity(entity_id) / ha_get_state(entity_id): state and attributes of one entity
+- ha_list_services(): available services per domain
 - ha_call_service(domain, service, data): call any HA service (use this to control devices)
-- ha_list_automations(search, limit): list automations
-- ha_list_areas(): list all areas
-- ha_get_config(): get HA core configuration
-- ha_get_history(entity_id, hours): get state history for an entity
-- ha_get_error_log(lines=50): get HA error log (ONLY when user explicitly asks)
-- ha_restart(): restart Home Assistant (use with caution)
+- ha_bulk_control(...): bulk operations on many entities at once
+- ha_call_event(event_type, event_data): fire a custom event on the HA bus
+- ha_get_overview(): HA version, config summary, per-domain counts
+- ha_get_system_health(): system health details
+- ha_list_floors_areas(): list areas and floors
+- ha_get_history(entity_id, hours): state history for an entity
+- ha_get_automation_traces(automation_id): recent execution traces of an automation
+- ha_config_get_automation / ha_config_set_automation(id, yaml): read/write automations
+- ha_eval_template(template): render a Jinja2 template against HA state
+- ha_get_app / ha_manage_app: inspect and manage apps/add-ons (HA OS)
+- ha_get_logs(source, limit): HA logs — ONLY when the user explicitly asks (Rules 1-2)
+- ha_restart() / ha_reload_core(): restart or reload HA core (use with caution)
 HAMD
 if [ -d /config ] && [ ! -f "/config/VIBE.md" ]; then
     cp /usr/share/vibe-defaults/VIBE.md /config/VIBE.md
@@ -159,9 +166,9 @@ bashio::log.info "Writing Vibe config to ${CONFIG_FILE}"
 # decides them per model (and ships with auto_update_cli). When the API is
 # unreachable we do NOT fall back to a cache (a stale catalog is worse than a
 # short one): warn and register only the active model as-is.
-python3 - "${CONFIG_FILE}" "${ACTIVE_MODEL}" "${MODELS_JSON_FILE}" "${SUPERVISOR_TOKEN:-}" <<'PY'
+python3 - "${CONFIG_FILE}" "${ACTIVE_MODEL}" "${MODELS_JSON_FILE}" <<'PY'
 import sys, json, pathlib
-config_path, active, models_json_path, ha_token = sys.argv[1:5]
+config_path, active, models_json_path = sys.argv[1:4]
 tpl = pathlib.Path("/usr/share/vibe-defaults/config.toml.tpl").read_text()
 
 entries = []  # (alias, api_id)
@@ -218,9 +225,7 @@ for alias, mid in entries:
 
 text = (tpl
         .replace("__ACTIVE_MODEL__", active_alias)
-        .replace("__MODELS_BLOCK__", "\n".join(blocks))
-        .replace("__HA_URL__", "http://supervisor/core")
-        .replace("__HA_TOKEN__", ha_token))
+        .replace("__MODELS_BLOCK__", "\n".join(blocks)))
 pathlib.Path(config_path).write_text(text)
 print(f"Active model: {active_alias} (api id: {rid}); registered {len(entries)} model(s) from {'live API' if api_ok else 'active_model only'}", file=sys.stderr)
 PY
