@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Workflow actions (actions/checkout, docker/*, hadolint, frenck linter,
+  # home-assistant/builder). SHA-pinned refs (e.g. home-assistant/builder@<sha>)
+  # get bumped to the SHA of the newest release — before merging such a PR,
+  # confirm the referenced ghcr builder image actually exists for both arches.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+
+  # mistralvibe/Dockerfile base images. debian:bookworm-slim floats (security
+  # updates flow through automatically); node stays on major 22 (pinned for
+  # the Brotli CVE fix, see Dockerfile header) — only minor/patch bumps.
+  - package-ecosystem: docker
+    directory: /mistralvibe
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
