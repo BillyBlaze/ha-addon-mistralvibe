@@ -25,10 +25,7 @@ api_base = "https://api.mistral.ai/v1"
 api_key_env_var = "MISTRAL_API_KEY"
 backend = "mistral"
 
-[[models]]
-name = "__MODEL_NAME__"
-provider = "mistral"
-alias = "__ACTIVE_MODEL__"
+__MODELS_BLOCK__
 
 [[mcp_servers]]
 name = "hass"

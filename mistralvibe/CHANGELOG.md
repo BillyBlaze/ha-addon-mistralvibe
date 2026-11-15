@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — 2026-11-14
+## 1.0.0-beta1 — 2026-11-15
 
 ### Added
 - Mobile terminal patch injected into the ttyd web client at image build time (`patch-ttyd-mobile.py` + `ttyd-patch/inject.css` / `inject.js`, edit the templates and rebuild):
@@ -9,11 +9,12 @@
   - page/terminal background follows the active terminal theme (`--ttyd-patch-term-bg` from `term.options.theme.background`, HA dark `#111111` as pre-JS fallback) so no white flash and no contrasting seam around the canvas
 - Mobile terminal now runs under tmux with its own session name `vibe-mobile` (desktop keeps `vibe`, so the two never attach to each other)
 - Ingress proxy adds `Cache-Control: no-store` to responses (fixes stale cached pages when testing) and routes by UA: `iPhone|iPad|Android|Mobile` → mobile ttyd :7683, otherwise desktop :7682
+- Model catalog is now dynamic, not hardcoded: at startup every chat+function-calling model from the live `api.mistral.ai/v1/models` is registered as a `[[models]]` entry (deduplicated per model card), so Vibe's model picker mirrors the current Mistral catalog — e.g. `mistral-large-4` shows up with its low/medium/high thinking levels. `active_model` remains the only user-facing choice (default model, resolved live; stable `-latest` aliases don't go stale). Thinking levels are left to Vibe's own known-models table (kept current via `auto_update_cli`). If the API is unreachable, the app warns and registers only `active_model` as-is (no cache — a stale catalog is worse than a short one; models curl timeout 10s so a down API can't stall startup)
 - Dev docs in `scripts/DOCS.md` (Samba dev loop, HTTP repo serving, ttyd patch workflow)
 
 ### Changed
 - `config.yaml`: deprecated `map: config` entry replaced by the new-style `map: [{type: homeassistant_config, path: /config, read_only: false}]` — same mount point, no more Supervisor deprecation warning
-- Init script: HA version and Mistral model list are fetched in parallel with timeouts; model resolution falls back to a cache (`/data/vibe/.model_cache`) when api.mistral.ai is slow/unreachable; `/config` mount is guarded so a missing mount no longer aborts startup
+- Init script: HA version and Mistral model list are fetched in parallel with timeouts; `/config` mount is guarded so a missing mount no longer aborts startup
 
 ### Fixed
 - Ingress proxy no longer corrupts HTTP framing when rewriting responses (earlier body injection truncated pages and broke `Content-Length`; now headers only)

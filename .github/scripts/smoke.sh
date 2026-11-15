@@ -46,9 +46,12 @@ import sys, pathlib, tomllib
 
 tpl = pathlib.Path(sys.argv[1]) / "rootfs/usr/share/vibe-defaults/config.toml.tpl"
 text = tpl.read_text()
-for ph in ("__MODEL_NAME__", "__ACTIVE_MODEL__", "__HA_URL__", "__HA_TOKEN__"):
+for ph in ("__ACTIVE_MODEL__", "__HA_URL__", "__HA_TOKEN__"):
     assert ph in text, f"placeholder {ph} missing from template"
     text = text.replace(ph, "x")
+# the init script substitutes __MODELS_BLOCK__ with real [[models]] tables
+assert "__MODELS_BLOCK__" in text, "placeholder __MODELS_BLOCK__ missing from template"
+text = text.replace("__MODELS_BLOCK__", '[[models]]\nname = "x"\nprovider = "x"\nalias = "x"')
 cfg = tomllib.loads(text)
 assert cfg["models"][0]["alias"] == "x" == cfg["active_model"]
 print("OK: config.toml template renders to valid TOML")

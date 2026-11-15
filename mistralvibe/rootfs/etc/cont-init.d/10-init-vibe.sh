@@ -41,7 +41,9 @@ if [ -n "${SUPERVISOR_TOKEN}" ]; then
 else
     bashio::log.warning "SUPERVISOR_TOKEN not set, HA version unknown"
 fi
-curl -sf --connect-timeout 5 --max-time 30 \
+# short timeout: if the API is down we warn and register only active_model,
+# we never want a slow API to stall startup
+curl -sf --connect-timeout 5 --max-time 10 \
     -H "Authorization: Bearer ${MISTRAL_API_KEY}" \
     "https://api.mistral.ai/v1/models" -o "${MODELS_JSON_FILE}" &
 
@@ -122,70 +124,87 @@ if [ -z "${ACTIVE_MODEL}" ] || [ "${ACTIVE_MODEL}" = "null" ]; then
     exit 1
 fi
 
-bashio::log.info "Resolving model '${ACTIVE_MODEL}' via Mistral API..."
-MODEL_CACHE="${VIBE_HOME}/.model_cache"
-if [ -s "${MODELS_JSON_FILE}" ]; then
-    MODELS_JSON="$(cat "${MODELS_JSON_FILE}")"
-else
-    MODELS_JSON=""
-fi
-
-MODEL_NAME="$(echo "${MODELS_JSON}" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(1)
-wanted = sys.argv[1]
-ids = [m['id'] for m in data.get('data', [])]
-if wanted in ids:
-    print(wanted)
-else:
-    matches = sorted(i for i in ids if i.startswith(wanted))
-    print(matches[-1] if matches else '')
-" "${ACTIVE_MODEL}" 2>/dev/null || true)"
-
-if [ -n "${MODELS_JSON}" ]; then
-    if [ -z "${MODEL_NAME}" ]; then
-        bashio::log.fatal "Model '${ACTIVE_MODEL}' not found at api.mistral.ai. Check the current model ids at https://docs.mistral.ai/models and update the 'active_model' option."
-        exit 1
-    fi
-    if [ "${MODEL_NAME}" != "${ACTIVE_MODEL}" ]; then
-        bashio::log.info "Resolved '${ACTIVE_MODEL}' to '${MODEL_NAME}'"
-    fi
-    printf '%s %s\n' "${ACTIVE_MODEL}" "${MODEL_NAME}" > "${MODEL_CACHE}"
-else
-    # API unreachable or timed out: fall back to the last successful
-    # resolution so a slow Mistral API never stalls startup. (Guard the
-    # pipeline: bashio enables pipefail, and grep exits 2 when the cache
-    # file does not exist yet, which would abort the script under set -e.)
-    CACHED=""
-    if [ -f "${MODEL_CACHE}" ]; then
-        CACHED="$(grep -F "${ACTIVE_MODEL} " "${MODEL_CACHE}" | tail -1 | cut -d' ' -f2- || true)"
-    fi
-    if [ -n "${CACHED}" ]; then
-        bashio::log.warning "Could not reach api.mistral.ai/v1/models - using cached resolution '${ACTIVE_MODEL}' -> '${CACHED}'"
-        MODEL_NAME="${CACHED}"
-    else
-        bashio::log.warning "Could not reach api.mistral.ai/v1/models - using '${ACTIVE_MODEL}' as-is"
-        MODEL_NAME="${ACTIVE_MODEL}"
-    fi
-fi
-
-bashio::log.info "Active model: ${ACTIVE_MODEL} (api id: ${MODEL_NAME})"
+bashio::log.info "Resolving model catalog via Mistral API..."
 
 bashio::log.info "Writing Vibe config to ${CONFIG_FILE}"
-sed \
-    -e "s|__MODEL_NAME__|${MODEL_NAME}|g" \
-    -e "s|__ACTIVE_MODEL__|${ACTIVE_MODEL}|g" \
-    -e "s|__HA_URL__|http://supervisor/core|g" \
-    -e "s|__HA_TOKEN__|${SUPERVISOR_TOKEN}|g" \
-    /usr/share/vibe-defaults/config.toml.tpl > "${CONFIG_FILE}"
+# The model catalog is NOT hardcoded: every chat+function-calling model from
+# the live api.mistral.ai/v1/models list is registered as a [[models]] entry
+# (deduplicated per model card, alias = card name), so new Mistral models show
+# up in Vibe's picker after a restart and retired ones disappear. thinking
+# levels are left unset on purpose — the Vibe package's own known-models table
+# decides them per model (and ships with auto_update_cli). When the API is
+# unreachable we do NOT fall back to a cache (a stale catalog is worse than a
+# short one): warn and register only the active model as-is.
+python3 - "${CONFIG_FILE}" "${ACTIVE_MODEL}" "${MODELS_JSON_FILE}" "${SUPERVISOR_TOKEN:-}" <<'PY'
+import sys, json, pathlib
+config_path, active, models_json_path, ha_token = sys.argv[1:5]
+tpl = pathlib.Path("/usr/share/vibe-defaults/config.toml.tpl").read_text()
+
+entries = []  # (alias, api_id)
+api_ok = False
+p = pathlib.Path(models_json_path)
+if p.exists() and p.stat().st_size > 0:
+    try:
+        data = json.load(open(models_json_path)).get("data", [])
+        all_ids = {m["id"] for m in data}
+        cards = {}
+        for m in data:
+            caps = m.get("capabilities") or {}
+            if not (caps.get("completion_chat") and caps.get("function_calling")):
+                continue
+            card = m.get("name") or m["id"]
+            mid = m["id"]
+            # prefer the canonical id (id == card name) when the API lists it
+            if card not in cards or mid == card:
+                cards[card] = mid
+        # alias = the card name when it is itself a valid id, else the id
+        entries = sorted((card if card in all_ids else mid, mid) for card, mid in cards.items())
+        api_ok = True
+    except Exception:
+        api_ok = False
+
+def resolve(alias):
+    for a, mid in entries:
+        if alias in (a, mid):
+            return mid
+    matches = sorted(mid for _, mid in entries if mid.startswith(alias))
+    return matches[-1] if matches else ""
+
+if api_ok:
+    rid = resolve(active)
+    if not rid:
+        print(f"Model '{active}' not found at api.mistral.ai. Check the current model ids at https://docs.mistral.ai/models and update the 'active_model' option.", file=sys.stderr)
+        sys.exit(1)
+    if rid != active:
+        print(f"Resolved '{active}' to '{rid}'", file=sys.stderr)
+    # the active model's alias must exist among the registered entries
+    active_alias = next((a for a, mid in entries if mid == rid), rid)
+    if not any(mid == rid for _, mid in entries):
+        entries.insert(0, (active, rid))
+        active_alias = active
+else:
+    entries = [(active, active)]
+    rid = active
+    active_alias = active
+    print(f"WARNING: Could not reach api.mistral.ai/v1/models - registering only '{active}' as-is (no cached catalog)", file=sys.stderr)
+
+blocks = []
+for alias, mid in entries:
+    blocks.append(f'[[models]]\nname = "{mid}"\nprovider = "mistral"\nalias = "{alias}"\n')
+
+text = (tpl
+        .replace("__ACTIVE_MODEL__", active_alias)
+        .replace("__MODELS_BLOCK__", "\n".join(blocks))
+        .replace("__HA_URL__", "http://supervisor/core")
+        .replace("__HA_TOKEN__", ha_token))
+pathlib.Path(config_path).write_text(text)
+print(f"Active model: {active_alias} (api id: {rid}); registered {len(entries)} model(s) from {'live API' if api_ok else 'active_model only'}", file=sys.stderr)
+PY
 chmod 600 "${CONFIG_FILE}"
 
-python3 - "$CONFIG_FILE" "$ACTIVE_MODEL" "$AUTO_UPDATE_CLI" "$ENABLE_TELEMETRY" <<'PY'
+python3 - "$CONFIG_FILE" "$AUTO_UPDATE_CLI" "$ENABLE_TELEMETRY" <<'PY'
 import sys, re, pathlib
-path, model, auto_update, telemetry = sys.argv[1:]
+path, auto_update, telemetry = sys.argv[1:]
 text = pathlib.Path(path).read_text()
 
 def upsert(key, value):
@@ -196,7 +215,8 @@ def upsert(key, value):
     else:
         text += f"\n{key} = {value}\n"
 
-upsert("active_model", f'"{model}"')
+# active_model is already rendered from the template (resolved alias) — don't
+# overwrite it with the raw option here
 upsert("enable_update_checks", "true" if auto_update == "true" else "false")
 upsert("enable_telemetry", "true" if telemetry == "true" else "false")
 pathlib.Path(path).write_text(text)
