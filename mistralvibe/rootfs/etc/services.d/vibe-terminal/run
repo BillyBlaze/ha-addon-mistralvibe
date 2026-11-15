@@ -48,25 +48,25 @@ esac
 
 if [ "${SESSION_PERSISTENCE}" = "true" ]; then
     mkdir -p /root/.config/tmux
-    cat > /root/.config/tmux/tmux.conf <<'TMUXEOF'
-set -g mouse on
-set -g history-limit 10000
-set -g default-terminal "xterm-256color"
-TMUXEOF
+    printf '%s\n' \
+        'set -g mouse on' \
+        'set -g history-limit 10000' \
+        'set -g default-terminal "xterm-256color"' \
+        > /root/.config/tmux/tmux.conf
+    # `-s <name>` is the tmux session name: desktop and mobile get separate
+    # sessions so they never attach to each other (the `v` alias in .bashrc
+    # attaches to "vibe"). `; bash` drops to a shell when the launcher exits.
     if [ -n "${LAUNCHER}" ]; then
         DESKTOP_CMD="tmux new-session -A -s vibe '${LAUNCHER}'; bash"
+        MOBILE_CMD="tmux new-session -A -s vibe-mobile '${LAUNCHER}'; bash"
     else
         DESKTOP_CMD="tmux new-session -A -s vibe; bash"
+        MOBILE_CMD="tmux new-session -A -s vibe-mobile; bash"
     fi
 else
-    if [ -n "${LAUNCHER}" ]; then
-        DESKTOP_CMD="${LAUNCHER}"
-    else
-        DESKTOP_CMD="bash --login"
-    fi
+    DESKTOP_CMD="${LAUNCHER:-bash --login}"
+    MOBILE_CMD="${LAUNCHER:-bash --login}"
 fi
-
-MOBILE_CMD="${LAUNCHER:-bash --login}"
 
 bashio::log.info "Starting ttyd desktop on port 7682"
 ttyd --port 7682 --interface 127.0.0.1 ${TTYD_OPTS} bash -c "${DESKTOP_CMD}" &

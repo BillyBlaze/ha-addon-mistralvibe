@@ -3,7 +3,11 @@ import json
 import os
 import re
 
-MOBILE_PATTERNS = [b'iPhone', b'iPad']
+# Android UAs contain "Android" (and usually "Mobile"); iOS contains
+# "iPhone"/"iPad". "Mobile" alone catches most other phones. Desktop
+# browsers (incl. iPad in desktop-mode, which reports "Macintosh") miss all
+# of these and correctly get the desktop terminal.
+MOBILE_PATTERNS = [b'iPhone', b'iPad', b'Android', b'Mobile']
 
 TASK_QUEUE = "/data/vibe/task-queue.jsonl"
 
@@ -13,12 +17,28 @@ def is_mobile(header_bytes):
         return any(p in ua.group(1) for p in MOBILE_PATTERNS)
     return False
 
-async def pipe(reader, writer):
+async def pipe(reader, writer, is_response=False, port=None):
+    # NOTE: only response HEADERS may be rewritten here. Injecting bytes into
+    # the body breaks HTTP framing (Content-Length / chunked) and truncates
+    # the document — that is why an injected <script> at the end of the page
+    # never executed. Body patches belong in the built index.html, not here.
+    headers_done = not is_response
     try:
         while True:
             data = await reader.read(65536)
             if not data:
                 break
+            if is_response and not headers_done:
+                head, sep, rest = data.partition(b'\r\n\r\n')
+                if sep and head.startswith(b'HTTP/') and b' 101 ' not in head.split(b'\r\n', 1)[0]:
+                    # never let browsers cache the app shell: code updates must
+                    # show up on next page load without cache-busting queries
+                    head = re.sub(b'(?i)cache-control:[^\r\n]*\r\n', b'', head)
+                    # head has no trailing CRLF (partition ate it) — add one
+                    # or the new header glues onto the previous line
+                    head += b'\r\nCache-Control: no-store'
+                    data = head + sep + rest
+                headers_done = True
             writer.write(data)
             await writer.drain()
     except Exception:
@@ -48,6 +68,9 @@ async def handle(client_r, client_w):
         return
 
     port = 7683 if is_mobile(header) else 7682
+    ua = re.search(b'User-Agent: ([^\r\n]+)', header, re.IGNORECASE)
+    ua_str = ua.group(1).decode('utf-8', 'replace') if ua else '(none)'
+    print(f"[proxy] {request_line} -> port {port} | UA: {ua_str}", flush=True)
 
     for attempt in range(5):
         try:
@@ -61,7 +84,8 @@ async def handle(client_r, client_w):
 
     srv_w.write(header)
     await srv_w.drain()
-    await asyncio.gather(pipe(client_r, srv_w), pipe(srv_r, client_w))
+    await asyncio.gather(pipe(client_r, srv_w),
+                         pipe(srv_r, client_w, is_response=True))
 
 async def read_body(client_r, header):
     """Read the request body, handling both Content-Length and chunked

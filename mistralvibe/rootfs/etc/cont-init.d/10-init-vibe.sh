@@ -17,12 +17,40 @@ if [ "${RESET_DATA}" = "true" ]; then
 fi
 
 
-bashio::log.info "Writing dynamic ha.md system prompt"
+MISTRAL_API_KEY="$(bashio::config 'mistral_api_key')"
+ACTIVE_MODEL="$(bashio::config 'active_model')"
+DEFAULT_AGENT="$(bashio::config 'default_agent')"
+AUTO_APPROVE="$(bashio::config 'auto_approve')"
+AUTO_UPDATE_CLI="$(bashio::config 'auto_update_cli')"
+ENABLE_TELEMETRY="$(bashio::config 'enable_telemetry')"
+
+if [ -z "${MISTRAL_API_KEY}" ] || [ "${MISTRAL_API_KEY}" = "null" ]; then
+    bashio::log.fatal "No 'mistral_api_key' configured."
+    exit 1
+fi
+
+# Kick off both network lookups in parallel so a slow Mistral API does not
+# add its full latency on top of the (fast, local) Supervisor call.
+HA_VERSION_JSON="$(mktemp)"
+MODELS_JSON_FILE="$(mktemp)"
+trap 'rm -f "${HA_VERSION_JSON}" "${MODELS_JSON_FILE}"' EXIT
 if [ -n "${SUPERVISOR_TOKEN}" ]; then
-    HA_VERSION=$(curl -sf --max-time 5 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" http://supervisor/core/api/config | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','unknown'))" 2>/dev/null || echo "unknown")
+    curl -sf --connect-timeout 2 --max-time 5 \
+        -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+        http://supervisor/core/api/config -o "${HA_VERSION_JSON}" &
+else
+    bashio::log.warning "SUPERVISOR_TOKEN not set, HA version unknown"
+fi
+curl -sf --connect-timeout 5 --max-time 30 \
+    -H "Authorization: Bearer ${MISTRAL_API_KEY}" \
+    "https://api.mistral.ai/v1/models" -o "${MODELS_JSON_FILE}" &
+
+bashio::log.info "Writing dynamic ha.md system prompt"
+wait
+if [ -s "${HA_VERSION_JSON}" ]; then
+    HA_VERSION=$(python3 -c "import sys,json; print(json.load(open(sys.argv[1])).get('version','unknown'))" "${HA_VERSION_JSON}" 2>/dev/null || echo "unknown")
 else
     HA_VERSION="unknown"
-    bashio::log.warning "SUPERVISOR_TOKEN not set, HA version unknown"
 fi
 
 cat > "${VIBE_HOME}/prompts/ha.md" << HAMD
@@ -76,20 +104,10 @@ ha core logs 2>&1 | grep -iE "(error|exception)"
 - ha_get_error_log(lines=50): get HA error log (ONLY when user explicitly asks)
 - ha_restart(): restart Home Assistant (use with caution)
 HAMD
-if [ ! -f "/config/VIBE.md" ]; then
+if [ -d /config ] && [ ! -f "/config/VIBE.md" ]; then
     cp /usr/share/vibe-defaults/VIBE.md /config/VIBE.md
-fi
-
-MISTRAL_API_KEY="$(bashio::config 'mistral_api_key')"
-ACTIVE_MODEL="$(bashio::config 'active_model')"
-DEFAULT_AGENT="$(bashio::config 'default_agent')"
-AUTO_APPROVE="$(bashio::config 'auto_approve')"
-AUTO_UPDATE_CLI="$(bashio::config 'auto_update_cli')"
-ENABLE_TELEMETRY="$(bashio::config 'enable_telemetry')"
-
-if [ -z "${MISTRAL_API_KEY}" ] || [ "${MISTRAL_API_KEY}" = "null" ]; then
-    bashio::log.fatal "No 'mistral_api_key' configured."
-    exit 1
+elif [ ! -d /config ]; then
+    bashio::log.warning "/config is not mounted - skipping VIBE.md seed"
 fi
 
 cat > "${ENV_FILE}" <<EOF
@@ -105,9 +123,12 @@ if [ -z "${ACTIVE_MODEL}" ] || [ "${ACTIVE_MODEL}" = "null" ]; then
 fi
 
 bashio::log.info "Resolving model '${ACTIVE_MODEL}' via Mistral API..."
-MODELS_JSON="$(curl -sf \
-    -H "Authorization: Bearer ${MISTRAL_API_KEY}" \
-    "https://api.mistral.ai/v1/models" || echo "")"
+MODEL_CACHE="${VIBE_HOME}/.model_cache"
+if [ -s "${MODELS_JSON_FILE}" ]; then
+    MODELS_JSON="$(cat "${MODELS_JSON_FILE}")"
+else
+    MODELS_JSON=""
+fi
 
 MODEL_NAME="$(echo "${MODELS_JSON}" | python3 -c "
 import sys, json
@@ -132,9 +153,23 @@ if [ -n "${MODELS_JSON}" ]; then
     if [ "${MODEL_NAME}" != "${ACTIVE_MODEL}" ]; then
         bashio::log.info "Resolved '${ACTIVE_MODEL}' to '${MODEL_NAME}'"
     fi
+    printf '%s %s\n' "${ACTIVE_MODEL}" "${MODEL_NAME}" > "${MODEL_CACHE}"
 else
-    bashio::log.warning "Could not reach api.mistral.ai/v1/models - using '${ACTIVE_MODEL}' as-is"
-    MODEL_NAME="${ACTIVE_MODEL}"
+    # API unreachable or timed out: fall back to the last successful
+    # resolution so a slow Mistral API never stalls startup. (Guard the
+    # pipeline: bashio enables pipefail, and grep exits 2 when the cache
+    # file does not exist yet, which would abort the script under set -e.)
+    CACHED=""
+    if [ -f "${MODEL_CACHE}" ]; then
+        CACHED="$(grep -F "${ACTIVE_MODEL} " "${MODEL_CACHE}" | tail -1 | cut -d' ' -f2- || true)"
+    fi
+    if [ -n "${CACHED}" ]; then
+        bashio::log.warning "Could not reach api.mistral.ai/v1/models - using cached resolution '${ACTIVE_MODEL}' -> '${CACHED}'"
+        MODEL_NAME="${CACHED}"
+    else
+        bashio::log.warning "Could not reach api.mistral.ai/v1/models - using '${ACTIVE_MODEL}' as-is"
+        MODEL_NAME="${ACTIVE_MODEL}"
+    fi
 fi
 
 bashio::log.info "Active model: ${ACTIVE_MODEL} (api id: ${MODEL_NAME})"

@@ -14,35 +14,35 @@ services, automations and YAML configs via a custom MCP server.
 - Open-source, Apache 2.0 licensed CLI on top of Mistral's current model catalog
 - A read-only "plan" mode for exploration without any writes
 
-## API Key & Kosten
+## API key & billing
 
-Mistral Vibe unterstützt zwei Abrechnungsmodelle:
+Mistral Vibe supports two billing models:
 
-### Le Chat Pro (empfohlen für intensive Nutzung)
+### Le Chat Pro (recommended for heavy use)
 
-Le Chat Pro beinhaltet ein monatliches Vibe-Budget das auch mit der CLI – und damit mit dieser App – genutzt werden kann.
+Le Chat Pro includes a monthly Vibe budget that can also be used with the CLI — and therefore with this app.
 
-1. Abo abschließen unter https://chat.mistral.ai
-2. API-Key erstellen unter **Studio → Codestral → API keys**
-3. Diesen Key als `mistral_api_key` in der App-Konfiguration eintragen
+1. Subscribe at https://chat.mistral.ai
+2. Create an API key under **Studio → Codestral → API keys**
+3. Enter this key as `mistral_api_key` in the app configuration
 
-Wenn das monatliche Budget aufgebraucht ist, wird Vibe standardmäßig bis zur nächsten Abrechnungsperiode deaktiviert. Im Mistral Admin Panel kann optional Pay-as-you-go aktiviert werden, damit es nahtlos weiterläuft.
+When the monthly budget is exhausted, Vibe is by default disabled until the next billing period. In the Mistral admin panel you can optionally enable pay-as-you-go so it continues seamlessly.
 
-> **Hinweis:** Le Chat Pro über Partner-Angebote (Google, Apple, Free Mobile, Orange) unterstützt Pay-as-you-go nach Budgetausschöpfung nicht.
+> **Note:** Le Chat Pro via partner offers (Google, Apple, Free Mobile, Orange) does not support pay-as-you-go after the budget is exhausted.
 
-### Pay-as-you-go (Experiment / Scale Plan)
+### Pay-as-you-go (Experiment / Scale plan)
 
-Für gelegentliche Nutzung oder zum Ausprobieren:
+For occasional use or to try things out:
 
-1. Account erstellen unter https://console.mistral.ai
-2. API-Key erstellen unter **Studio → Organization → API keys**
-3. Key als `mistral_api_key` eintragen
+1. Create an account at https://console.mistral.ai
+2. Create an API key under **Studio → Organization → API keys**
+3. Enter the key as `mistral_api_key`
 
-Abrechnung per Token. Aktuelle Preise siehe https://mistral.ai/pricing (z. B. Mistral Small 4 ab $0.10/1M Input-Token).
+Billed per token. Current prices at https://mistral.ai/pricing (e.g. Mistral Small 4 from $0.10/1M input tokens).
 
 ## First-time setup
 
-1. Erstelle einen Mistral API-Key (siehe **API Key & Kosten** oben).
+1. Create a Mistral API key (see **API key & billing** above).
 2. Open this app, switch to the **Configuration** tab and paste your key
    into `mistral_api_key`. Save.
 3. Start the app. Open the **Web UI** (or the sidebar entry).
@@ -156,24 +156,13 @@ fully supported.
 
 ## Security notes
 
-- **Mistral API key** – gespeichert in `/data/vibe/.env` (chmod 600, nur root lesbar).
-- **HA Supervisor Token** – steht in `/data/vibe/config.toml` unter `[mcp_servers.env]` als Klartext. Das ist ein bewusster Kompromiss: Vibe vererbt die Shell-Umgebung nicht an MCP-Kindprozesse, daher muss der Token explizit übergeben werden. `/data/vibe/config.toml` ist nur innerhalb des App-Containers zugänglich.
-- **`hassio_role: manager`** – die App hat denselben Supervisor-Zugriff wie der offizielle Studio Code Server. Das ist nötig damit der MCP-Server Entities, Services und Automationen verwalten kann.
-- **AppArmor** – standardmäßig aktiv. Das Profil erlaubt Lese-/Schreibzugriff auf `/config`, `/share`, `/data` und verwehrt alles andere.
-- **`ha_call_service`** – der MCP-Server kann jeden HA-Service aufrufen, inkl. destruktiver wie `homeassistant.stop`. Für reine Inspektion ohne Schreibzugriff `default_agent: plan` verwenden.
-- **`ha_restart`** – kann HA ohne Bestätigung neustarten wenn `auto_approve: true` gesetzt ist. Standardmäßig ist `auto_approve: false`.
-- **`auto_approve: false`** – Standardwert. Vibe fragt vor jedem Tool-Call nach Bestätigung. Nur aktivieren wenn du weißt was du tust.
-
-
-- The Mistral API key sits in `/data/vibe/.env` (mode `600`). Only this app
-  can read it.
-- The `SUPERVISOR_TOKEN` is the standard HA app token. The `hassio_role`
-  is set to `manager`, the same level used by the official Studio Code Server
-  app, so Vibe can manage entities, services, automations, snapshots, etc.
-- AppArmor is **enabled by default**. The profile in `apparmor.txt` allows
-  what the CLI needs (read/write under `/config`, `/share`, `/data` …) and
-  denies the rest.
-- For exploration without any side effects, set `default_agent: plan`.
+- **Mistral API key** — stored in `/data/vibe/.env` (chmod 600, root-readable only).
+- **HA Supervisor token** — sits in plaintext in `/data/vibe/config.toml` under `[mcp_servers.env]`. That is a deliberate trade-off: Vibe does not inherit the shell environment into MCP child processes, so the token has to be passed explicitly. `/data/vibe/config.toml` is only accessible inside the app container.
+- **`hassio_role: manager`** — the app has the same Supervisor access as the official Studio Code Server app. This is required so the MCP server can manage entities, services and automations.
+- **`ha_call_service`** — the MCP server can call any HA service, including destructive ones like `homeassistant.stop`. For read-only inspection, use `default_agent: plan`.
+- **`ha_restart`** — can restart HA without confirmation when `auto_approve: true` is set. By default `auto_approve: false`.
+- **AppArmor** — enabled by default. The profile allows read/write under `/config`, `/share` and `/data` and denies everything else.
+- **`auto_approve: false`** — the default. Vibe asks before every tool call. Only enable it if you know what you are doing.
 
 ## Differences vs. the Claude Code app
 

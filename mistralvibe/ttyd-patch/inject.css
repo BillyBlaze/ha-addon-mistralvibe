@@ -1,0 +1,68 @@
+/* dynamic viewport height as fallback; inject.js sets an explicit px height
+   on html/body/#terminal-container from visualViewport.height when the
+   virtual keyboard opens (inline style must be able to win, so no
+   !important here) */
+html, body {
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+/* HA dark theme background (--primary-background-color in dark mode) so the
+   initial paint is not white. Once inject.js sets --ttyd-patch-term-bg this
+   becomes the terminal theme color, so any strip left around the canvas
+   (terminal padding, container/viewport height remainder) is seamless. */
+html, body, #terminal-container {
+  background: var(--ttyd-patch-term-bg, #111111);
+}
+
+/* the bottom safe-area inset (Android gesture bar / iOS home indicator) is
+   subtracted in inject.js when it sets the explicit px height — do NOT add
+   a padding-bottom here too, box-sizing would subtract it twice */
+
+/* let vertical swipes scroll the terminal instead of being captured as
+   mouse/text-selection input */
+#terminal-container, .xterm, .xterm-viewport, .xterm-screen {
+  touch-action: pan-y !important;
+  overscroll-behavior: contain;
+}
+
+/* xterm.css hardcodes the viewport background to #000, which shows as a seam
+   right of the last column / below the last row — a terminal is a character
+   grid, so the last column never fills fractional pixels. Paint the
+   remainder with the active terminal theme background instead; inject.js
+   sets --ttyd-patch-term-bg from window.term.options.theme. */
+.xterm .xterm-viewport {
+  background-color: var(--ttyd-patch-term-bg, #0f0f17);
+}
+
+/* The native scrollbar eats width (15px classic) and the fit addon then
+   computes fewer columns. Hiding it fully is not an option: xterm 5.5
+   measures scrollBarWidth = offsetWidth - clientWidth || 15, and 0 hits the
+   ||15 fallback. So on ALL platforms keep a thin scrollbar but paint it with
+   the terminal theme color via the STANDARD properties (scrollbar-color /
+   scrollbar-width) — Chrome 121+ ignores ::-webkit-scrollbar pseudos when
+   these are set, and some builds (Brave) render the pseudos gray regardless.
+   Theme-colored = invisible against the terminal background; still draggable
+   on desktop, and wheel/touch scrolling works everywhere. */
+.xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ttyd-patch-term-bg, #0f0f17) var(--ttyd-patch-term-bg, #0f0f17);
+}
+
+/* ttyd gives the terminal element 5px padding on all sides; the fit addon
+   subtracts it from the available width. Drop it on mobile for max columns. */
+.ttyd-patch-mobile #terminal-container .terminal,
+.ttyd-patch-mobile .xterm {
+  padding: 0 !important;
+}
+
+/* xterm quantizes the glyph width to integer DEVICE pixels (devCellW), so
+   the CSS cell width varies with DPR and the grid (cols*cellW) never fills
+   the container exactly. Do NOT stretch the canvases to 100%: their backing
+   store is only cols*devCellW wide, and the stretched edge renders as opaque
+   black (WebGL alpha:false) — a visible dark band at the right edge. Instead
+   paint the screen element's background with the theme color so the
+   sub-grid remainder is indistinguishable from the terminal background. */
+.xterm-screen {
+  background-color: var(--ttyd-patch-term-bg, #0f0f17);
+}

@@ -71,6 +71,12 @@ RUN case "${BUILD_ARCH}" in \
 # Custom ttyd web client with OSC 52 clipboard support (see ttyd-client stage)
 COPY --from=ttyd-client /ttyd/html/dist/inline.html /usr/share/ttyd/index.html
 
+# Mobile fixes (CSS + JS live in ttyd-patch/, edit those files)
+COPY patch-ttyd-mobile.py /tmp/ttyd-patch/patch-ttyd-mobile.py
+COPY ttyd-patch/ /tmp/ttyd-patch/ttyd-patch/
+RUN python3 /tmp/ttyd-patch/patch-ttyd-mobile.py /usr/share/ttyd/index.html \
+ && rm -rf /tmp/ttyd-patch
+
 # ---- s6-overlay v2 -----------------------------------------------------------
 # Debian bookworm is merged-usr: /bin is a symlink to usr/bin. The s6 tarball
 # has a real ./bin directory (would clobber it) and ./usr/bin/execlineb is a

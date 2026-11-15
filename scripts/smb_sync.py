@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """Sync the mistralvibe app folder to a HA host's local_apps Samba share.
 
-Usage: smb_sync.py <host> <user> <password> [local_app_dir]
-Requires: uv run --with smbprotocol python3 scripts/smb_sync.py ...
+Mirrors the local dir to //<host>/local_apps/mistralvibe, deleting remote
+files that no longer exist locally. Used by scripts/dev-sync.sh — prefer
+that wrapper.
+
+Usage (credentials as arguments, for one-off use only — argv lands in
+shell history; dev-sync.sh reads ~/.ha-dev-sync.env or env vars instead):
+
+    uv run --with smbprotocol python3 scripts/smb_sync.py <host> <user> <password> [local_app_dir]
+
+Requires the official Samba share app on the HA host exposing `local_apps`.
 """
 import os
 import sys

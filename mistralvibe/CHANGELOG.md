@@ -1,8 +1,28 @@
 # Changelog
 
-All notable changes to this app will be documented in this file.
+## 1.0.0 — 2026-11-14
 
-## 2.1.0 — 2026-11-14
+### Added
+- Mobile terminal patch injected into the ttyd web client at image build time (`patch-ttyd-mobile.py` + `ttyd-patch/inject.css` / `inject.js`, edit the templates and rebuild):
+  - touch-to-scroll on mobile: vertical swipes are translated into wheel events for xterm/tmux; taps still pass through so links stay clickable
+  - virtual-keyboard handling: on `visualViewport` resize the terminal is cut to the visible height (top window viewport via same-origin `window.top`, HA header excluded via `window.frameElement`, Android gesture-bar inset via `env(safe-area-inset-bottom)` + `viewport-fit=cover`), then xterm is refit
+  - page/terminal background follows the active terminal theme (`--ttyd-patch-term-bg` from `term.options.theme.background`, HA dark `#111111` as pre-JS fallback) so no white flash and no contrasting seam around the canvas
+- Mobile terminal now runs under tmux with its own session name `vibe-mobile` (desktop keeps `vibe`, so the two never attach to each other)
+- Ingress proxy adds `Cache-Control: no-store` to responses (fixes stale cached pages when testing) and routes by UA: `iPhone|iPad|Android|Mobile` → mobile ttyd :7683, otherwise desktop :7682
+- Dev docs in `scripts/DOCS.md` (Samba dev loop, HTTP repo serving, ttyd patch workflow)
+
+### Changed
+- `config.yaml`: deprecated `map: config` entry replaced by the new-style `map: [{type: homeassistant_config, path: /config, read_only: false}]` — same mount point, no more Supervisor deprecation warning
+- Init script: HA version and Mistral model list are fetched in parallel with timeouts; model resolution falls back to a cache (`/data/vibe/.model_cache`) when api.mistral.ai is slow/unreachable; `/config` mount is guarded so a missing mount no longer aborts startup
+
+### Fixed
+- Ingress proxy no longer corrupts HTTP framing when rewriting responses (earlier body injection truncated pages and broke `Content-Length`; now headers only)
+- ttyd web patch: the sub-character-cell remainder right of the last column / below the last row is painted with the terminal theme background instead of xterm's hardcoded black, so the grid edge is seamless (stretching the canvas instead renders an opaque black band — WebGL `alpha:false`)
+- ttyd web patch: on overlay-scrollbar platforms (Android/iOS) xterm's `scrollBarWidth` `|| 15` fallback is overridden with the true measurement (0), so the fit addon no longer reserves a phantom 15px — previously a visible gap at the right end of the status bar
+- ttyd web patch: the native scrollbar is painted with the theme color via standard `scrollbar-width: thin` + `scrollbar-color` (Chrome 121+/Brave ignore `::-webkit-scrollbar` pseudos, which rendered gray)
+- ttyd web patch: with the virtual keyboard open the terminal is sized to `visualViewport.height` + half the browser chrome (Brave's visual viewport also subtracts its hidden bottom bar, which left a ~100px void above the keyboard), so the whole terminal including the status line stays above the keyboard
+
+## 0.9.1 — 2026-11-14
 
 ### Changed
 - `active_model` is now a free-text option (default `mistral-medium-latest`) instead of a fixed dropdown. The chosen model is validated against the live `api.mistral.ai/v1/models` list at startup; an id that no longer exists aborts the start with a clear log message
@@ -20,7 +40,7 @@ All notable changes to this app will be documented in this file.
 - Browser terminal now serves a custom ttyd web client (pinned ttyd commit, built with yarn/corepack) with OSC 52 clipboard support — copy/paste in the ingress terminal works now
 - New options: `auto_launch` (`off`/`new`/`continue`, default `new`) and `working_directory` (default `/config`), honored by the launcher and the headless task runner
 
-## 2.0.0 — 2026-11-07
+## 0.9.0 — 2026-11-07
 
 ### Changed
 - **Base image migrated from Alpine/HA base to `debian:bookworm-slim`.**
@@ -61,6 +81,11 @@ All notable changes to this app will be documented in this file.
   starts, ttyd terminal reachable via Ingress, MCP bridge authenticated via
   SUPERVISOR_TOKEN, Vibe CLI runs against a Vibe Pro API key.
 - Maintainer label updated for the fork.
+
+# Before
+
+History inherited from the abandoned upstream repository (version numbers
+there went up to 1.8.2).
 
 ## 1.8.2 — 2026-05-02
 
