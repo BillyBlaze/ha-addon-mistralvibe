@@ -81,19 +81,22 @@ configuration:
       Directory Vibe starts in (and headless tasks run from). Must be a mapped
       folder, e.g. /config, /share or /media.
   mcp_source:
-    name: MCP server source
+    name: Home Assistant MCP server
     description: >-
-      "builtin" runs a local ha-mcp server inside this app (loopback only).
-      "external" connects Vibe to an external ha-mcp server — e.g. the HA-MCP
-      HACS integration, with its GUI, read-only mode and tool selection.
+      "builtin" (default): ha-mcp runs inside this app and is reachable only
+      from within it — nothing else to configure. "external": Vibe connects to
+      your own ha-mcp server instead — e.g. the HA-MCP HACS integration with
+      its settings GUI, read-only mode and tool selection. Then also set
+      "External MCP URL" below.
   external_mcp_url:
     name: External MCP URL
     description: >-
-      Streamable-HTTP MCP endpoint of the external ha-mcp server, only used
-      when MCP server source is "external" — e.g. the HA-MCP integration's
-      private URL (http://<ha-ip>:9584/private_... — the secret path itself is the MCP endpoint, no /mcp suffix). Required in external
-      mode. Stored in /data/vibe/config.toml (chmod 600) — the URL may embed a
-      secret path.
+      MCP endpoint of your external ha-mcp server — only used when the MCP
+      server above is "external". For the HA-MCP HACS integration, copy its
+      private URL from the Configure screen, e.g.
+      http://<ha-ip>:9584/private_... (the secret path itself is the endpoint —
+      do not append /mcp). Required in external mode. Stored in
+      /data/vibe/config.toml (chmod 600) — the URL may embed a secret path.
   external_mcp_token:
     name: External MCP token
     description: >-
