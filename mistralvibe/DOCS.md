@@ -136,7 +136,7 @@ gets `HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN` (the Supervisor token) from
 Set `mcp_source: external` and `external_mcp_url` to use your own ha-mcp server
 instead — typically the **HA-MCP HACS integration**, which adds a settings GUI,
 read-only mode and per-tool selection. Get the URL from the integration's
-**Configure** screen (its private URL, e.g. `http://<ha-ip>:9584/private_…/mcp`,
+**Configure** screen (its private URL, e.g. `http://<ha-ip>:9584/private_…` (the secret path itself is the MCP endpoint — do not append `/mcp`),
 with *Network access: Local network* enabled in the integration). The in-container
 ha-mcp service is not started in this mode. If the external server requires a
 bearer token instead of a secret path, set `external_mcp_token` — it is sent as

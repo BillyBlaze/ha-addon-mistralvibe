@@ -91,7 +91,7 @@ configuration:
     description: >-
       Streamable-HTTP MCP endpoint of the external ha-mcp server, only used
       when MCP server source is "external" — e.g. the HA-MCP integration's
-      private URL (http://<ha-ip>:9584/private_.../mcp). Required in external
+      private URL (http://<ha-ip>:9584/private_... — the secret path itself is the MCP endpoint, no /mcp suffix). Required in external
       mode. Stored in /data/vibe/config.toml (chmod 600) — the URL may embed a
       secret path.
   external_mcp_token:
