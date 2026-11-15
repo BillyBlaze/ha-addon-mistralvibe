@@ -83,19 +83,17 @@ configuration:
   mcp_source:
     name: Home-Assistant-MCP-Server
     description: >-
-      "builtin" (Standard): ha-mcp läuft in dieser App und ist nur von innen
-      erreichbar — nichts weiter einzustellen. "external": Vibe verbindet sich
-      stattdessen mit Ihrem eigenen ha-mcp-Server — z. B. der HA-MCP-HACS-
-      Integration mit Einstellungs-GUI, Read-only-Modus und Tool-Auswahl.
-      Dann auch „Externe MCP-URL" unten setzen.
+      "builtin" (Standard): ha-mcp läuft in dieser App — nichts zu
+      konfigurieren. "external": eigener ha-mcp-Server (HA-MCP-HACS-
+      Integration: GUI, Read-only-Modus, Tool-Auswahl) — erfordert
+      „Externe MCP-URL" unten.
   external_mcp_url:
     name: Externe MCP-URL
     description: >-
-      MCP-Endpunkt Ihres externen ha-mcp-Servers — nur genutzt, wenn der
+      MCP-Endpunkt Ihres externen ha-mcp-Servers. Pflicht, wenn der
       MCP-Server oben auf "external" steht. Bei der HA-MCP-HACS-Integration
-      die private URL aus dem Configure-Dialog kopieren, z. B.
-      http://<ha-ip>:9584/private_... (der geheime Pfad selbst ist der
-      Endpunkt — kein /mcp anhängen). In external Pflicht. Wird in
+      die private URL aus dem Configure-Dialog kopieren:
+      http://<ha-ip>:9584/private_... (kein /mcp-Anhang). Wird in
       /data/vibe/config.toml (chmod 600) gespeichert — die URL kann einen
       geheimen Pfad enthalten.
   external_mcp_token:

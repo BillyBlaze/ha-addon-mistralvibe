@@ -74,7 +74,7 @@ internally to authenticate the custom MCP server against Home Assistant Core.
 | `default_task_model` | *(empty)* | Model for headless tasks sent to `POST /task`. Empty = the app's `active_model`. |
 | `task_max_runtime_minutes` | `30` | Max runtime of a headless task (1-240 min) before it is killed. |
 | `task_token` | *(empty = random, persisted)* | Bearer token required for `POST /task`. Empty generates a random one on first boot into `/data/vibe/.env` and reuses it across restarts/updates (read it in the app terminal: `grep TASK_TOKEN /data/vibe/.env`). Set your own for a stable, automation-friendly value. |
-| `mcp_source` | `builtin` | Where Vibe gets its Home Assistant tools: `builtin` = ha-mcp runs inside this app, reachable only from within it (nothing to configure); `external` = your own ha-mcp server, e.g. the HA-MCP HACS integration — see "External MCP mode" below. |
+| `mcp_source` | `builtin` | Where Vibe gets its Home Assistant tools: `builtin` = ha-mcp runs inside this app (nothing to configure); `external` = your own ha-mcp server (requires `external_mcp_url`) — see "External MCP mode" below. |
 | `external_mcp_url` | *(empty)* | Streamable-HTTP MCP endpoint of the external ha-mcp server (required when `mcp_source: external`), e.g. the HA-MCP HACS integration's private URL. |
 | `external_mcp_token` | *(empty)* | Optional bearer token for the external MCP server (`Authorization: Bearer …`). Leave empty for secret-path URLs. Stored in `/data/vibe/.env`, never in `config.toml`. |
 
@@ -136,10 +136,9 @@ gets `HOMEASSISTANT_URL` / `HOMEASSISTANT_TOKEN` (the Supervisor token) from
 Set `mcp_source: external` and `external_mcp_url` to use your own ha-mcp server
 instead of the built-in one — typically the **HA-MCP HACS integration**, which adds
 a settings GUI, read-only mode and per-tool selection. Copy the URL from the
-integration's **Configure** screen (its private URL, e.g. `http://<ha-ip>:9584/private_…`
-— the secret path itself is the MCP endpoint, do not append `/mcp`), with
-*Network access: Local network* enabled in the integration. The in-container
-ha-mcp service is not started in this mode. If the external server requires a
+integration's **Configure** screen: its private URL, `http://<ha-ip>:9584/private_…`
+(no `/mcp` suffix), with *Network access: Local network* enabled in the integration.
+The in-container ha-mcp service is not started in this mode. If the external server requires a
 bearer token instead of a secret path, set `external_mcp_token` — it is sent as
 `Authorization: Bearer …` via `api_key_env` and stored only in `/data/vibe/.env`.
 Note: the URL itself (which may embed a secret path) is written to
