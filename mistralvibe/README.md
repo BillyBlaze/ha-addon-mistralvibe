@@ -1,17 +1,21 @@
 # Mistral Vibe — Home Assistant App
 
 Run [Mistral Vibe CLI](https://github.com/mistralai/mistral-vibe) (Mistral AI's
-open-source agentic coding agent powered by Devstral 2) directly inside Home
-Assistant. Browser terminal in the sidebar, full HA API access through a custom MCP server, persistent state under `/data/vibe`.
+open-source agentic coding agent, running on Mistral's current model catalog)
+directly inside Home Assistant. Terminal in the sidebar, full HA API access
+through a custom MCP server, persistent state under `/data/vibe`.
 
 ## Quick start
 
 1. Add this repository to **Settings → Apps → Add-on Store → ⋮ →
    Repositories**.
 2. Install **Mistral Vibe**, paste a Mistral API key into the **Configuration**
-   tab, start the app, open the Web UI.
-3. Type `vibe` and start asking things like *"What automations didn't run last
-   night?"* or *"Add a sunset trigger to scene.evening_lights"*.
+   tab (`mistral_api_key`), start the app.
+3. Click **Mistral Vibe** in the HA sidebar — the web terminal opens straight
+   into a Vibe session (`auto_launch` defaults to `new`; set it to `off` if you
+   prefer a plain shell and type `vibe` yourself). Start asking things like
+   *"What automations didn't run last night?"* or *"Add a sunset trigger to
+   scene.evening_lights"*.
 
 See [`DOCS.md`](./DOCS.md) for full configuration, architecture and security
 details.
