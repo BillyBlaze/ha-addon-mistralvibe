@@ -4,8 +4,12 @@ name: Build (test only)
 # Dockerfile on the HA host (store repo or Samba local_apps), cached after the
 # first build. This workflow only proves the Dockerfile builds on both
 # architectures on every PR and push. Publishing to a registry would be an
-# install-speed optimization only; add image:/build.yaml/tag publishing later
-# if that ever becomes worth it.
+# install-speed optimization only; add push=true + a publish job later if that
+# ever becomes worth it.
+#
+# Uses the new reusable build-image action. The legacy home-assistant/builder
+# action is deprecated; its --target mode also derived an invalid image name
+# ("/:1.0.0-beta4") from this repo layout and failed before building.
 on:
   pull_request:
   push:
@@ -26,15 +30,31 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Pin verified to exist on ghcr (2026.03.2). An arbitrary pin breaks the
-      # build with "not found"; @master silently falls back to an older builder
-      # image. Confirm the image exists before changing this SHA:
-      #   ghcr.io/home-assistant/amd64-builder:<sha>
-      #   ghcr.io/home-assistant/aarch64-builder:<sha>
-      - name: Build add-on (test, no publish)
-        uses: home-assistant/builder@62a1597b84b3461abad9816d9cd92862a2b542c3  # 2026.03.2
+      - name: Read app version
+        id: version
+        run: |
+          v=$(sed -n 's/^version: "\(.*\)"/\1/p' mistralvibe/config.yaml)
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+
+      # QEMU so RUN steps work when cross-building aarch64 on an amd64 runner
+      - uses: docker/setup-qemu-action@v3
+
+      # Pin = commit SHA of builder tag 2026.03.2 (its actions/build-image is
+      # what we call below). Confirm the action exists at the SHA before
+      # changing it: home-assistant/builder tree at that ref must contain
+      # actions/build-image/action.yml.
+      - name: Build image (test, no publish)
+        uses: home-assistant/builder/actions/build-image@62a1597b84b3461abad9816d9cd92862a2b542c3 # 2026.03.2
         with:
-          args: |
-            --test \
-            --${{ matrix.arch }} \
-            --target mistralvibe
+          arch: ${{ matrix.arch }}
+          image: ghcr.io/${{ github.repository_owner }}/mistralvibe
+          image-tags: ${{ steps.version.outputs.version }}
+          version: ${{ steps.version.outputs.version }}
+          # required inputs, but unused while push=false (no login happens)
+          container-registry-username: ${{ github.actor }}
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+          context: mistralvibe
+          load: true
+          push: false
+          cosign: false
+          cache-gha: false
