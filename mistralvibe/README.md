@@ -23,6 +23,14 @@ This app is inspired by
 adapted for Mistral Vibe instead of Claude Code. Same UX, same MCP-based HA
 integration, different (open-weight) engine. Both apps can run side-by-side.
 
+## Credits
+
+Originally created by [umrath](https://github.com/umrath) as
+[`umrath/mistralvibe-hass-app`](https://github.com/umrath/mistralvibe-hass-app),
+which in turn drew from
+[robsonfelix/claudecode](https://github.com/robsonfelix/robsonfelix-hass-addons).
+This fork continues that work; see the repository README for the full history.
+
 ## License
 
 Apache 2.0
