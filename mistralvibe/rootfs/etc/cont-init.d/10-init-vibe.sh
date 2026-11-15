@@ -41,9 +41,11 @@ if [ -n "${SUPERVISOR_TOKEN}" ]; then
 else
     bashio::log.warning "SUPERVISOR_TOKEN not set, HA version unknown"
 fi
-# short timeout: if the API is down we warn and register only active_model,
-# we never want a slow API to stall startup
-curl -sf --connect-timeout 5 --max-time 10 \
+# short timeouts: if the API is down we warn and register only active_model,
+# we never want a slow API to stall startup. connect-timeout must exceed the
+# real connect time to api.mistral.ai — measured ~6s from this host (slow
+# IPv6/Cloudflare path), so 5s silently degraded the catalog to 1 model
+curl -sf --connect-timeout 8 --max-time 15 \
     -H "Authorization: Bearer ${MISTRAL_API_KEY}" \
     "https://api.mistral.ai/v1/models" -o "${MODELS_JSON_FILE}" &
 
@@ -112,11 +114,33 @@ elif [ ! -d /config ]; then
     bashio::log.warning "/config is not mounted - skipping VIBE.md seed"
 fi
 
+# capture a previously generated token BEFORE .env is rewritten below, so an
+# empty task_token option keeps the SAME token across restarts/updates (/data
+# persists) instead of rotating it on every start — otherwise every automation
+# posting to /task would break on each app restart
+EXISTING_TASK_TOKEN="$(grep -E '^TASK_TOKEN=' "${ENV_FILE}" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+
 cat > "${ENV_FILE}" <<EOF
 MISTRAL_API_KEY=${MISTRAL_API_KEY}
 HA_URL=http://supervisor/core
 HA_TOKEN=${SUPERVISOR_TOKEN}
 EOF
+
+# Bearer token required by the proxy's POST /task endpoint (headless tasks).
+# Empty option = reuse the persisted generated token, or generate one on first
+# boot — so /task is never open and automations don't break on restart. Set the
+# option to choose your own stable token. Read it in the app terminal with:
+# grep TASK_TOKEN /data/vibe/.env
+TASK_TOKEN="$(bashio::config 'task_token')"
+if [ -z "${TASK_TOKEN}" ] || [ "${TASK_TOKEN}" = "null" ]; then
+    if [ -n "${EXISTING_TASK_TOKEN}" ]; then
+        TASK_TOKEN="${EXISTING_TASK_TOKEN}"
+    else
+        TASK_TOKEN="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+        bashio::log.info "task_token option empty — generated a random one (persisted in /data/vibe/.env; set the option to choose your own)"
+    fi
+fi
+printf 'TASK_TOKEN=%s\n' "${TASK_TOKEN}" >> "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 
 if [ -z "${ACTIVE_MODEL}" ] || [ "${ACTIVE_MODEL}" = "null" ]; then

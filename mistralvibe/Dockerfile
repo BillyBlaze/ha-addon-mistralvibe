@@ -99,11 +99,15 @@ RUN case "${BUILD_ARCH}" in \
  && rm -rf /tmp/s6root /tmp/s6.tar.gz
 
 # ---- uv + managed Python + CLIs ---------------------------------------------
+# Python packages are PINNED so two builds of the same add-on tag are
+# identical (a floating install can break on a bad upstream release).
+# Runtime updates of the Vibe CLI itself are handled by auto_update_cli
+# (writes to /usr/local/bin, which AppArmor allows).
 RUN curl -LsSf https://astral.sh/uv/install.sh \
       | env UV_INSTALL_DIR=/usr/local/bin sh \
  && uv python install 3.13 \
- && uv tool install --python 3.13 mistral-vibe \
- && python3 -m pip install --break-system-packages --no-cache-dir fastmcp httpx \
+ && uv tool install --python 3.13 mistral-vibe==3.1.2 \
+ && python3 -m pip install --break-system-packages --no-cache-dir fastmcp==4.2.0 httpx==0.28.1 \
  && rm -rf /root/.cache /tmp/*
 
 # ---- Home Assistant CLI -----------------------------------------------------
@@ -124,8 +128,10 @@ RUN chmod a+x \
 
 ENTRYPOINT ["/init"]
 
+# probe the proxy AND both ttyd backends — a dead ttyd behind a healthy
+# proxy must still fail the healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -sf http://localhost:7681/ || exit 1
+    CMD curl -sf http://localhost:7681/ && curl -sf http://localhost:7682/ && curl -sf http://localhost:7683/ || exit 1
 
 LABEL \
     io.hass.name="Mistral Vibe" \

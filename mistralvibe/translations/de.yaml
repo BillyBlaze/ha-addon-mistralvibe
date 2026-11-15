@@ -55,13 +55,20 @@ configuration:
   default_task_model:
     name: Standard-Modell für Aufgaben
     description: >-
-      Modell-Alias für headless Aufgaben über den hassio.addon_stdin-Service.
+      Modell-Alias für headless Aufgaben an den POST /task-Endpunkt der App.
       Leer = das aktive Modell der App.
   task_max_runtime_minutes:
     name: Max. Aufgaben-Laufzeit (Minuten)
     description: >-
       Maximale Laufzeit einer headless Aufgabe (1-240 Minuten). Die Aufgabe
       wird nach Ablauf dieser Zeit beendet.
+  task_token:
+    name: Token für Aufgaben-Endpunkt
+    description: >-
+      Bearer-Token für POST /task (headless Aufgaben aus Automationen).
+      Leer lassen, um beim ersten Start ein zufälliges zu erzeugen — es wird in
+      /data/vibe/.env persistiert und über Neustarts hinweg wiederverwendet.
+      Auslesbar im App-Terminal via: grep TASK_TOKEN /data/vibe/.env
   auto_launch:
     name: Vibe automatisch starten
     description: >-

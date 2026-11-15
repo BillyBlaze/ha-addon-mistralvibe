@@ -3,8 +3,8 @@
 profile mistralvibe flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
 
-  capability net_admin,
-  capability net_raw,
+  # no net_admin / net_raw: nothing in the app needs raw sockets or
+  # interface configuration — the container only makes outbound TCP/UDP
   capability setgid,
   capability setuid,
   capability chown,
@@ -13,7 +13,11 @@ profile mistralvibe flags=(attach_disconnected,mediate_deleted) {
   capability dac_read_search,
   capability sys_tty_config,
 
-  network,
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix stream,
 
   /dev/ptmx rw,
   /dev/pts/* rw,
@@ -42,8 +46,6 @@ profile mistralvibe flags=(attach_disconnected,mediate_deleted) {
 
   /data/** rwk,
 
-  /homeassistant/ r,
-  /homeassistant/** rwk,
   /ssl/ r,
   /ssl/** r,
   /share/ r,

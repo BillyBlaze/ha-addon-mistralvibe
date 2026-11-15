@@ -18,11 +18,14 @@ The recommended loop — no git push, no GitHub, no registry:
 scripts/dev-sync.sh        # mirrors mistralvibe/ -> //HA_HOST/local_apps/mistralvibe
 ```
 
-Then rebuild the installed copy so the Supervisor re-runs the Dockerfile from
-the synced sources. In HA: Settings → Apps → ⋮ → Reload, then update/rebuild
-the `local_mistralvibe` app. Via the HA MCP tools:
-`ha_manage_app(action="check_updates")` then
-`ha_manage_app(action="rebuild", slug="local_mistralvibe")` — rebuilds can
+Then update the installed copy so the Supervisor re-runs from the synced
+sources. On HA 2026.11+ the repository lives under **Settings → Apps →
+Install app → ⋮ → Repositories** (older HA: **App Store → ⋮ →
+Repositories**); installed apps are at `/config/apps/installed`. Bump
+`version` in `mistralvibe/config.yaml`, then update via the app's **Update**
+action or the HA MCP tools: `ha_manage_app(action="check_updates")` then
+`ha_manage_app(action="update", slug="local_mistralvibe")`. Use
+`action="rebuild"` only when the Dockerfile itself changed — rebuilds can
 exceed a 60 s tool budget; just retry the call.
 
 - `smb_sync.py` is the underlying sync used by `dev-sync.sh`: it mirrors the

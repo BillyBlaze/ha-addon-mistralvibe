@@ -3,6 +3,16 @@
 // release to the browser. Taps pass through untouched (6px threshold,
 // passive touchstart) so links stay clickable.
 (function () {
+  // ttyd-patch diagnostics (fit/boot/wheel logs) only print with
+  // ?ttydpatch=debug in the URL — ttyd's own [ttyd] logs are untouched
+  var DEBUG = /[?&]ttydpatch=debug/.test(location.search);
+  var origLog = console.log.bind(console);
+  console.log = function () {
+    if (DEBUG || String(arguments[0]).indexOf('ttyd-patch') !== 0) {
+      origLog.apply(null, arguments);
+    }
+  };
+
   var DRAG_THRESHOLD = 6;  // px of jitter tolerated before treating as scroll
   var PX_PER_LINE = 12;    // finger travel per scrolled line
 

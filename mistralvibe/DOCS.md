@@ -65,10 +65,15 @@ internally to authenticate the custom MCP server against Home Assistant Core.
 | `auto_update_cli` | `true` | Lets Vibe self-update on launch when a newer release is on PyPI. Disable to pin the version that ships with the app. |
 | `enable_telemetry` | `false` | Forwarded to Vibe as the `enable_telemetry` config flag. Off by default. |
 | `log_level` | `info` | Controls the verbosity of the underlying `ttyd` server (`trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`). |
+| `terminal_font_size` | `14` | Font size of the web terminal in pixels (10-24). |
+| `terminal_theme` | `dark` | Color theme of the web terminal: `dark` or `light`. |
+| `reset_data` | `false` | When `true`, `/data/vibe` is wiped on the next start (config, history, session logs). Set back to `false` afterwards. |
+| `session_persistence` | `true` | Keep the terminal session alive in tmux when the browser tab closes. |
 | `auto_launch` | `new` | What happens when the web terminal opens: `new` starts a fresh Vibe session, `continue` resumes the last one, `off` opens a plain shell. |
 | `working_directory` | `/config` | Directory Vibe starts in and headless tasks run from. Must be a mapped folder (`/config`, `/share`, `/media`). |
-| `default_task_model` | *(empty)* | Model for headless `hassio.addon_stdin` tasks. Empty = the app's `active_model`. |
+| `default_task_model` | *(empty)* | Model for headless tasks sent to `POST /task`. Empty = the app's `active_model`. |
 | `task_max_runtime_minutes` | `30` | Max runtime of a headless task (1-240 min) before it is killed. |
+| `task_token` | *(empty = random, persisted)* | Bearer token required for `POST /task`. Empty generates a random one on first boot into `/data/vibe/.env` and reuses it across restarts/updates (read it in the app terminal: `grep TASK_TOKEN /data/vibe/.env`). Set your own for a stable, automation-friendly value. |
 
 Every option above maps 1:1 to a key the init script writes into
 `/data/vibe/config.toml` or `/data/vibe/.env` — so you can also edit them
@@ -94,10 +99,12 @@ directly in a Vibe session if you want full control.
                                           │
                                           ▼
                               ┌──────────────────────────┐
-                              │  ttyd  :7681             │
-                              │  └─ bash                 │
-                              │     └─ vibe-launcher     │
-                              │        └─ mistral-vibe   │
+                              │  proxy :7681             │
+                              │  ├─ ttyd :7682 (desktop) │
+                              │  └─ ttyd :7683 (mobile)  │
+                              │     └─ tmux → bash       │
+                              │        └─ vibe-launcher  │
+                              │           └─ mistral-vibe│
                               └──────────┬───────────────┘
                                          │ stdio
                                          ▼
@@ -107,6 +114,11 @@ directly in a Vibe session if you want full control.
                               └──────────────────────────┘   /api/services
 ```
 
+The proxy on :7681 routes by User-Agent (mobile → :7683, everything else →
+:7682), strips cache headers, and exposes `POST /task` (bearer-token protected),
+which appends to `/data/vibe/task-queue.jsonl` — tailed by `vibe-stdin-runner`
+into a `vibe --auto-approve --prompt ...` run.
+
 `vibe-launcher` is the entry-point that loads the API key from `.env`,
 applies the `auto_approve` / `default_agent` flags from app options and
 execs the CLI. The custom MCP server (`/usr/share/ha-mcp/server.py`) is started on demand by Vibe as a stdio child process. It receives `HA_URL` and `HA_TOKEN` via `[mcp_servers.env]` in `config.toml`.
@@ -115,7 +127,21 @@ execs the CLI. The custom MCP server (`/usr/share/ha-mcp/server.py`) is started 
 
 An automation can run a one-shot Vibe task without opening the terminal — POST
 a JSON object to the app's task endpoint (the app's ingress port 7681, reachable
-from HA core via its add-on DNS name, e.g. `http://local-mistralvibe.local.hass.io:7681/task`):
+from HA core via its add-on DNS name, e.g. `http://local-mistralvibe.local.hass.io:7681/task`).
+The endpoint requires the bearer token from the `task_token` option — if the
+option is empty, a random token is generated on first boot and persisted in
+`/data/vibe/.env`, so it stays stable across restarts and updates (read it in
+the app terminal with `grep TASK_TOKEN /data/vibe/.env`; it only changes if you
+wipe `/data/vibe` via `reset_data`). Requests without a valid token get `403`:
+
+```bash
+curl -X POST "http://local-mistralvibe.local.hass.io:7681/task" \
+  -H "Authorization: Bearer $TASK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Summarize all automations that changed in the last 24 hours", "run_id": "daily-summary"}'
+```
+
+Task payloads:
 
 ```json
 {"prompt": "Summarize all automations that changed in the last 24 hours", "run_id": "daily-summary"}
@@ -161,7 +187,8 @@ fully supported.
 - **`hassio_role: manager`** — the app has the same Supervisor access as the official Studio Code Server app. This is required so the MCP server can manage entities, services and automations.
 - **`ha_call_service`** — the MCP server can call any HA service, including destructive ones like `homeassistant.stop`. For read-only inspection, use `default_agent: plan`.
 - **`ha_restart`** — can restart HA without confirmation when `auto_approve: true` is set. By default `auto_approve: false`.
-- **AppArmor** — enabled by default. The profile allows read/write under `/config`, `/share` and `/data` and denies everything else.
+- **AppArmor** — enabled. The profile grants only the capabilities s6/ttyd need (no `net_admin`/`net_raw`), limits networking to TCP/UDP/unix sockets, and allows writes only under `/data`, `/config`, `/share`, `/media`, `/root`, `/tmp`, `/usr/local` and `/opt` (the latter two so Vibe CLI self-updates work); everything else is read-only or denied.
+- **Headless task endpoint** — `POST /task` on the ingress port requires `Authorization: Bearer <task_token>` (403 otherwise) and caps the body at 1 MB. Without this, any other add-on on the hassio network could enqueue a task that runs `vibe --auto-approve` as root with `/config` mounted read-write.
 - **`auto_approve: false`** — the default. Vibe asks before every tool call. Only enable it if you know what you are doing.
 
 ## Differences vs. the Claude Code app

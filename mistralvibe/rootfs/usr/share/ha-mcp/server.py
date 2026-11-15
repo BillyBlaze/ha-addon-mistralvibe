@@ -2,6 +2,7 @@ import os
 import json
 import httpx
 from typing import Optional
+from urllib.parse import quote
 from fastmcp import FastMCP
 
 HA_URL = os.environ.get("HA_URL", "http://supervisor/core")
@@ -51,7 +52,7 @@ def ha_list_entities(domain: Optional[str] = None, search: Optional[str] = None,
 @mcp.tool
 def ha_get_entity(entity_id: str) -> dict:
     """Get the full state and attributes of a specific entity."""
-    return _get(f"/states/{entity_id}")
+    return _get(f"/states/{quote(entity_id, safe='')}")
 
 @mcp.tool
 def ha_call_service(domain: str, service: str, data: Optional[dict] = None) -> str:
@@ -109,8 +110,16 @@ def ha_get_error_log(lines: int = 50) -> str:
     lines = min(lines, 200)
     log_file = "/config/home-assistant.log"
     if os.path.exists(log_file):
-        with open(log_file, "r", errors="replace") as f:
-            return "\n".join(f.read().splitlines()[-lines:])
+        # tail via seek — the log can be hundreds of MB, never read it whole
+        tail_bytes = 1_000_000
+        size = os.path.getsize(log_file)
+        with open(log_file, "rb") as f:
+            f.seek(max(0, size - tail_bytes))
+            chunk = f.read(tail_bytes).decode("utf-8", "replace")
+        log_lines = chunk.splitlines()
+        if size > tail_bytes and log_lines:
+            log_lines = log_lines[1:]  # first line may be cut mid-way
+        return "\n".join(log_lines[-lines:])
     try:
         with httpx.Client(timeout=15) as client:
             r = client.get(f"{HA_URL}/api/error_log", headers=_headers())
@@ -128,7 +137,7 @@ def ha_get_history(entity_id: str, hours: int = 2) -> list:
     hours = min(hours, 24)
     from datetime import datetime, timedelta, timezone
     start = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-    result = _get(f"/history/period/{start}?filter_entity_id={entity_id}&minimal_response=true")
+    result = _get(f"/history/period/{start}?filter_entity_id={quote(entity_id, safe='')}&minimal_response=true")
     if result and isinstance(result, list) and result[0]:
         return result[0][-50:]
     return []

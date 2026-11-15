@@ -1,5 +1,5 @@
 name: Mistral Vibe
-version: "1.0.0-beta1"
+version: "1.0.0-beta2"
 slug: mistralvibe
 description: >-
   Run Mistral Vibe CLI directly inside Home Assistant.
@@ -17,7 +17,6 @@ ingress_stream: true
 stdin: true
 panel_icon: mdi:cat
 panel_title: Mistral Vibe
-init: false
 
 # --- Persistent state --------------------------------------------------------
 # /data is the persistent volume HA gives every app. We store the Vibe
@@ -50,14 +49,12 @@ auth_api: true
 hassio_role: manager
 
 # --- Host integrations -------------------------------------------------------
-host_network: false
-host_pid: false
-host_dbus: false
-full_access: false
-# Note: s6-init logs "s6-chown/chmod: Permission denied" for /run/s6 copies at
-# boot — cosmetic only. The Supervisor's reduced default capability set drops
-# CAP_CHOWN and CHOWN is not an allowed `privileged` value, so it can't be
-# re-added; services still start fine.
+# host_network / host_pid / host_dbus / full_access are all left at their
+# defaults (false) — and therefore not set explicitly (the add-on linter
+# rejects default-valued keys). Note: s6-init logs "s6-chown/chmod: Permission
+# denied" for /run/s6 copies at boot — cosmetic only. The Supervisor's reduced
+# default capability set drops CAP_CHOWN and CHOWN is not an allowed
+# `privileged` value, so it can't be re-added; services still start fine.
 
 # --- App options (shown in HA UI) -------------------------------------------
 options:
@@ -74,6 +71,7 @@ options:
   session_persistence: true
   default_task_model: ""
   task_max_runtime_minutes: 30
+  task_token: ""
   auto_launch: "new"
   working_directory: "/config"
 
@@ -91,11 +89,13 @@ schema:
   session_persistence: bool?
   default_task_model: str?
   task_max_runtime_minutes: int(1,240)?
+  task_token: password
   auto_launch: list(off|new|continue)?
   working_directory: str?
 
-# --- Apparmor & startup ------------------------------------------------------
-apparmor: true
+# --- Startup -----------------------------------------------------------------
+# apparmor stays enabled (default true) and boot stays "auto" — both are
+# defaults, so they are not set explicitly (the add-on linter rejects
+# default-valued keys).
 startup: services
-boot: auto
 stage: experimental

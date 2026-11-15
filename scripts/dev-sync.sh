@@ -13,11 +13,14 @@
 # Prereq on the HA host: the official Samba share app installed and running,
 # with a username/password set in its options.
 #
-# After syncing: in HA go to Settings -> Apps -> App Store -> menu (⋮) ->
-# Reload. The app appears under "Local apps". Install it — the Supervisor
-# builds the image from the local Dockerfile on the HA host (first build is
-# slow, later builds are cached). Bump `version` in mistralvibe/config.yaml
-# when you want the Update button on an installed copy.
+# After syncing: add/refresh the repository in HA via Settings -> Apps ->
+# Install app -> menu (⋮) -> Repositories (on older HA versions: App Store ->
+# ⋮ -> Repositories). The app then shows up under your repository in the
+# store — install it there; the Supervisor builds the image from the local
+# Dockerfile on the HA host (first build is slow, later builds are cached).
+# For an already-installed copy, bump `version` in mistralvibe/config.yaml and
+# use the app's Update action (ha_manage_app(action="update")); use
+# action="rebuild" only when the Dockerfile itself changed.
 set -euo pipefail
 
 ENV_FILE="${HOME}/.ha-dev-sync.env"

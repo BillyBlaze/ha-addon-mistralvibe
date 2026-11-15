@@ -1,6 +1,9 @@
 #!/usr/bin/with-contenv bashio
 # Headless Vibe runs triggered from Home Assistant automations via the
-# hassio.addon_stdin service. One JSON object per line on stdin:
+# proxy's POST /task endpoint, which appends one JSON object per line to
+# /data/vibe/task-queue.jsonl; the vibe-tasks service tails that file into
+# this runner's stdin (container stdin itself is /dev/null under our s6
+# init, so hassio.addon_stdin delivery doesn't reach us). Lines look like:
 #
 #   {"prompt": "...", "model": "optional-alias", "run_id": "my-task"}
 #   {"prompt_file": "/share/task.md"}
@@ -83,6 +86,9 @@ while true; do
     PROMPT_FILE="$(jq -r '.prompt_file // empty' <<< "${line}")"
     RUN_ID="$(jq -r '.run_id // empty' <<< "${line}")"
     MODEL="$(jq -r --arg d "${DEFAULT_MODEL}" '.model // $d' <<< "${line}")"
+    # run_id becomes a filename under LOG_DIR — strip everything except
+    # [A-Za-z0-9_-] so "../" traversal can't escape the log dir (we run as root)
+    RUN_ID="$(printf '%s' "${RUN_ID}" | tr -cd 'A-Za-z0-9_-' | cut -c1-64)"
     [ -z "${RUN_ID}" ] && RUN_ID="task-$(date +%s)"
 
     if [ -z "${PROMPT}" ] && [ -n "${PROMPT_FILE}" ]; then

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.0-beta2 — 2026-11-15
+
+### Security
+- `POST /task` (headless tasks) now requires `Authorization: Bearer <token>` and answers `403` otherwise; body capped at 1 MB, invalid JSON gets `400`. The token is the new `task_token` option — empty generates a random one at startup into `/data/vibe/.env` (read it in the app terminal: `grep TASK_TOKEN /data/vibe/.env`). Previously any container on the hassio network could enqueue a `vibe --auto-approve` run as root with `/config` RW.
+- `run_id` of headless tasks is sanitized to `[A-Za-z0-9_-]` (max 64 chars) before it becomes a log filename — was a path-traversal write as root
+- AppArmor profile trimmed: dropped `net_admin`/`net_raw` capabilities and the legacy `/homeassistant/` paths; networking limited to TCP/UDP/unix sockets
+- Ingress proxy: the `Cache-Control: no-store` rewrite now buffers until the full response header block arrives — a partial first chunk no longer bypasses it; `assert` in the task handler replaced with a real `400` check
+
+### Changed
+- Dockerfile: `mistral-vibe==3.1.2`, `fastmcp==4.2.0`, `httpx==0.28.1` pinned so builds of the same tag are reproducible (runtime CLI updates still via `auto_update_cli`)
+- `config.yaml`: removed keys the add-on linter rejects as default-valued (`apparmor`, `boot`, `full_access`, `host_dbus`, `host_network`, `host_pid`, `init`) — behavior unchanged, CI lint passes
+- `HEALTHCHECK` now also probes the ttyd backends `:7682`/`:7683`, not just the proxy on `:7681`
+- `ha_get_error_log` tails `/config/home-assistant.log` via seek (was: read the whole file into memory); `ha_get_entity`/`ha_get_history` URL-encode the entity id
+- ttyd-patch console diagnostics (`ttyd-patch fit/boot/wheel`) now only print with `?ttydpatch=debug` in the URL
+
+### Fixed
+- Init script: models-catalog curl `--connect-timeout 5` raised to `8` (`--max-time 15`) — the real connect time to api.mistral.ai from a HA host is ~6 s, so boot-time fetches timed out and the dynamic catalog silently degraded to a single model
+- Auto-generated `task_token` is now persisted in `/data/vibe/.env` and reused across restarts/updates — previously an empty option rotated the token on every start, which would have broken every `/task` automation on each app restart. Set the option for a stable, user-chosen token
+
+### Docs
+- `DOCS.md`: options table completed (`terminal_font_size`, `terminal_theme`, `reset_data`, `session_persistence`, `task_token`); architecture diagram shows proxy `:7681` → ttyd `:7682`/`:7683` plus the `/task` queue path; headless-task section documents the bearer token with a curl example; AppArmor security note corrected to match the profile
+- `scripts/DOCS.md` + `dev-sync.sh` header: current HA 2026.11 store flow (Settings → Apps → Install app → ⋮ → Repositories; installed apps at `/config/apps/installed`, update via the app's Update action)
+- Translations: `task_token` added (en/de); `default_task_model` description no longer references `hassio.addon_stdin`
+
 ## 1.0.0-beta1 — 2026-11-15
 
 ### Added
