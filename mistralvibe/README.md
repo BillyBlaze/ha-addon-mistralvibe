@@ -7,10 +7,12 @@ through a custom MCP server, persistent state under `/data/vibe`.
 
 ## Quick start
 
-1. Add this repository to **Settings → Apps → Add-on Store → ⋮ →
-   Repositories**.
-2. Install **Mistral Vibe**, paste a Mistral API key into the **Configuration**
-   tab (`mistral_api_key`), start the app.
+1. Add this repository's URL (`https://github.com/BillyBlaze/ha-addon-mistralvibe`)
+   via **Settings → Apps → Install app → ⋮ → Repositories** (on older HA
+   versions: **Settings → Apps → Add-on Store → ⋮ → Repositories**).
+2. Find **Mistral Vibe** under your repository in the store and click
+   **Install app**, paste a Mistral API key into the **Configuration** tab
+   (`mistral_api_key`), start the app.
 3. Click **Mistral Vibe** in the HA sidebar — the web terminal opens straight
    into a Vibe session (`auto_launch` defaults to `new`; set it to `off` if you
    prefer a plain shell and type `vibe` yourself). Start asking things like
